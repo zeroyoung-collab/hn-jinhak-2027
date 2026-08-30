@@ -116,8 +116,17 @@ tr.rowbtn:hover td{background:var(--lt)}
 .btn-cancel{background:#eceff4;color:var(--soft)}
 .btn-del{background:#fff;color:var(--red);border:2px solid var(--red)!important;flex:0 0 auto;padding:12px 16px!important}
 
+/* ── 엑셀 불러오기 모달 ── */
+#imodal{position:fixed;inset:0;background:rgba(9,20,40,.55);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:20px;overflow-y:auto}
+#imodal.show{display:flex}
+.ifile{border:2px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.ifile .fh{font-weight:900;font-size:14px;color:var(--navy);margin-bottom:4px}
+.ifile .fh .warn{color:var(--red);font-weight:700;font-size:12.5px}
+.ifile .frow-i{font-size:13px;color:var(--soft);padding:2px 0;border-top:1px dashed #e3e9f2}
+.ifile .frow-i b{color:var(--ink)}
+
 /* ── 기타 ── */
-.toolrow{display:flex;justify-content:flex-end;margin-bottom:10px}
+.toolrow{display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px}
 .csvbtn{background:#fff;border:2px solid var(--line);border-radius:9px;padding:7px 14px;font-size:13px;font-weight:700;color:var(--soft)}
 .csvbtn:hover{border-color:var(--navy);color:var(--navy)}
 footer{text-align:center;font-size:12px;color:#8a94a3;padding:24px 0 40px}
@@ -188,8 +197,24 @@ footer b{color:var(--navy)}
   </div>
 </div>
 
+<div id="imodal">
+  <div class="mbox" style="max-width:560px">
+    <h2>엑셀 불러오기 — 확인</h2>
+    <div id="ibody" style="max-height:50vh;overflow-y:auto;margin-bottom:6px"></div>
+    <div class="frow" style="display:flex;gap:16px;font-size:14px;font-weight:700">
+      <label style="display:flex;align-items:center;gap:6px"><input type="radio" name="imode" value="add" checked> 기존 내역에 추가(중복 제외)</label>
+      <label style="display:flex;align-items:center;gap:6px;color:var(--red)"><input type="radio" name="imode" value="replace"> 기존 내역 교체</label>
+    </div>
+    <div class="mbtns">
+      <button class="btn-cancel" id="icancel">취소</button>
+      <button class="btn-save" id="isave">저장</button>
+    </div>
+  </div>
+</div>
+
 <footer>호남고등학교 3학년부 · 2027학년도 대입 &nbsp;|&nbsp; 제작 · <b>호남고 조영신</b></footer>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getFirestore, collection, onSnapshot, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
@@ -300,7 +325,10 @@ function render(keepFocus){
         <select id="ff-cat"><option value="">전형 전체</option>${["학생부교과","학생부종합","논술","실기/특기","정시(가)","정시(나)","정시(다)","기타"].map(c=>`<option ${fCat===c?"selected":""}>${c}</option>`).join("")}</select>
         <input id="ff-q" placeholder="이름·대학·학과 검색" value="${esc(fQ)}">
       </div>
-      <div class="toolrow"><button class="csvbtn" id="csv">⬇ 엑셀(CSV) 다운로드</button></div>
+      <div class="toolrow">
+        <button class="csvbtn" id="xlsin">📥 엑셀 불러오기 (관심대학 리스트)</button>
+        <button class="csvbtn" id="csv">⬇ 엑셀(CSV) 다운로드</button>
+      </div>
       <div class="tblwrap"><table>
         <thead><tr><th>반</th><th>번호</th><th>이름</th><th>대학</th><th>모집단위</th><th>전형</th><th>전형명</th><th>결과</th><th>비고</th></tr></thead>
         <tbody>${list.length ? list.map(a => `
@@ -317,11 +345,15 @@ function render(keepFocus){
     q.oninput = e => { fQ = e.target.value; render(true); };
     if (keepFocus) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
     $("csv").onclick = downloadCsv;
+    $("xlsin").onclick = () => $("xlsfile").click();
     m.querySelectorAll("tr.rowbtn").forEach(tr => tr.onclick = () => openModal(tr.dataset.c, +tr.dataset.n, +tr.dataset.i));
   } else {
     const c = TAB, k = counts(allEntries(c));
     m.innerHTML = statHtml(k) +
-      `<div style="font-size:13px;color:var(--soft);margin-bottom:10px">담임 ${ROSTER[c].t} 선생님 · 학생 ${ROSTER[c].s.length}명 — 지원 내역을 누르면 결과를 수정할 수 있습니다.</div>` +
+      `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <div style="font-size:13px;color:var(--soft);flex:1">담임 ${ROSTER[c].t} 선생님 · 학생 ${ROSTER[c].s.length}명 — 지원 내역을 누르면 결과를 수정할 수 있습니다.</div>
+        <button class="csvbtn" id="xlsin">📥 엑셀 불러오기</button>
+      </div>` +
       ROSTER[c].s.map(([n, nm]) => {
         const apps = getApps(c, n);
         const kk = counts(apps);
@@ -342,6 +374,7 @@ function render(keepFocus){
             </div>`).join("") : `<div class="noentry">아직 입력된 지원 내역이 없습니다.</div>`}
           </div></div>`;
       }).join("");
+    $("xlsin").onclick = () => $("xlsfile").click();
     m.querySelectorAll(".addbtn").forEach(b => b.onclick = () => openModal(b.dataset.c, +b.dataset.n, null));
     m.querySelectorAll(".entry").forEach(el => el.onclick = () => openModal(el.dataset.c, +el.dataset.n, +el.dataset.i));
   }
@@ -393,6 +426,131 @@ $("mdel").onclick = async () => {
   const apps = getApps(c, n).filter((_, i) => i !== idx);
   try { await saveDoc(c, n, apps); closeModal(); }
   catch (e) { alert("삭제 실패: " + e.message); }
+};
+
+/* ── 엑셀(관심대학 리스트) 불러오기 ── */
+const fileInput = document.createElement("input");
+fileInput.type = "file"; fileInput.id = "xlsfile"; fileInput.accept = ".xlsx,.xls";
+fileInput.multiple = true; fileInput.style.display = "none";
+document.body.appendChild(fileInput);
+
+let importPlan = [];   // [{c, n, nameInFile, rosterName, warn, apps:[...]}]
+
+function toCat(row){
+  const tu = row.tu || "", si = row.si || "", all = tu + " " + (row.tname || "") + " " + si;
+  if (/논술/.test(tu)) return "논술";
+  if (/실기|실적|특기/.test(tu)) return "실기/특기";
+  if (/정시/.test(si)) {
+    const m = all.match(/([가나다])군/);
+    return m ? `정시(${m[1]})` : "기타";
+  }
+  if (/교과/.test(tu)) return "학생부교과";
+  if (/종합/.test(tu)) return "학생부종합";
+  return "기타";
+}
+function cleanTname(t){
+  t = (t || "").trim();
+  const m = t.match(/^[^(]*\((.*)\)$/);   // "학생부교과(일반전형)" → "일반전형"
+  return m ? m[1] : t;
+}
+function shortDate(s){
+  // "2026-11-21 ~ 2026-11-22" → "11.21~11.22"
+  const d = [...String(s || "").matchAll(/\d{4}-(\d{2})-(\d{2})/g)].map(m => `${+m[1]}.${+m[2]}`);
+  if (!d.length) return "";
+  return d[0] === d[1] || d.length === 1 ? d[0] : d.join("~");
+}
+
+function parseSheet(ws, fname){
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, defval:""});
+  let c = null, n = null, nameInFile = "";
+  for (let i = 0; i < Math.min(rows.length, 8); i++) {
+    const line = rows[i].join(" ");
+    const m = line.match(/3\s*학년\s*(\d+)\s*반\s*(\d+)\s*번\s*([가-힣]+)/);
+    if (m) { c = m[1]; n = +m[2]; nameInFile = m[3]; break; }
+  }
+  let hIdx = -1, col = {};
+  for (let i = 0; i < Math.min(rows.length, 12); i++) {
+    const cells = rows[i].map(v => String(v).replace(/\s/g, ""));
+    if (cells.includes("대학명") && cells.includes("모집단위")) {
+      hIdx = i;
+      cells.forEach((h, j) => {
+        if (h === "대학명") col.univ = j;
+        else if (h === "모집단위") col.major = j;
+        else if (h === "전형유형") col.tu = j;
+        else if (h === "세부유형") col.tname = j;
+        else if (h === "시기") col.si = j;
+        else if (h.startsWith("수능최저")) col.min = j;
+        else if (h.startsWith("면접일자")) col.interview = j;
+        else if (h.startsWith("최종발표")) col.announce = j;
+      });
+      break;
+    }
+  }
+  if (hIdx < 0) return {error:`${fname}: 헤더(대학명·모집단위)를 찾지 못했습니다.`};
+  if (!c || !ROSTER[c] || !ROSTER[c].s.find(s => s[0] === n))
+    return {error:`${fname}: "3학년 ○반 ○번 이름" 정보를 찾지 못했거나 명단에 없습니다.`};
+  const apps = [];
+  for (let i = hIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    const univ = String(r[col.univ] || "").trim();
+    const major = String(r[col.major] || "").trim();
+    if (!univ || !major) continue;
+    const row = {tu:String(r[col.tu]||""), si:String(r[col.si]||""), tname:String(r[col.tname]||"")};
+    const memoParts = [];
+    if (String(r[col.min]||"").trim().toUpperCase() === "Y") memoParts.push("수능최저 有");
+    const iv = shortDate(r[col.interview]);
+    if (iv) memoParts.push("면접 " + iv);
+    const an = shortDate(r[col.announce]);
+    if (an) memoParts.push("발표 " + an);
+    apps.push({univ, major, cat:toCat(row), tname:cleanTname(row.tname),
+      result:"발표 전", wait:"", memo:memoParts.join(" · "), final:false});
+  }
+  const rosterName = ROSTER[c].s.find(s => s[0] === n)[1];
+  return {c, n, nameInFile, rosterName, warn:nameInFile !== rosterName, apps};
+}
+
+fileInput.onchange = async () => {
+  const files = [...fileInput.files];
+  fileInput.value = "";
+  if (!files.length) return;
+  importPlan = []; const errors = [];
+  for (const f of files) {
+    try {
+      const wb = XLSX.read(await f.arrayBuffer());
+      const res = parseSheet(wb.Sheets[wb.SheetNames[0]], f.name);
+      if (res.error) errors.push(res.error);
+      else if (!res.apps.length) errors.push(`${f.name}: 지원 내역 행이 없습니다.`);
+      else importPlan.push(res);
+    } catch (e) { errors.push(`${f.name}: 읽기 실패 (${e.message})`); }
+  }
+  if (!importPlan.length) { alert("불러올 수 있는 데이터가 없습니다.\n\n" + errors.join("\n")); return; }
+  $("ibody").innerHTML =
+    (errors.length ? `<div style="color:var(--red);font-size:13px;font-weight:700;margin-bottom:8px">${errors.map(esc).join("<br>")}</div>` : "") +
+    importPlan.map(p => `<div class="ifile">
+      <div class="fh">${p.c}반 ${String(p.n).padStart(2,"0")}번 ${esc(p.rosterName)} — ${p.apps.length}건
+        ${p.warn ? `<span class="warn">⚠ 파일의 이름(${esc(p.nameInFile)})이 명단과 다릅니다</span>` : ""}</div>
+      ${p.apps.map(a => `<div class="frow-i"><b>${esc(a.univ)}</b> ${esc(a.major)} · ${esc(a.cat)}${a.tname ? " · " + esc(a.tname) : ""}${a.memo ? ` <span style="color:#8a94a3">(${esc(a.memo)})</span>` : ""}</div>`).join("")}
+    </div>`).join("");
+  $("imodal").classList.add("show");
+};
+
+$("icancel").onclick = () => $("imodal").classList.remove("show");
+$("imodal").addEventListener("click", e => { if (e.target === $("imodal")) $("imodal").classList.remove("show"); });
+$("isave").onclick = async () => {
+  const replace = document.querySelector('input[name="imode"]:checked').value === "replace";
+  $("isave").disabled = true;
+  try {
+    for (const p of importPlan) {
+      let apps = replace ? [] : [...getApps(p.c, p.n)];
+      for (const a of p.apps) {
+        const dup = apps.some(x => x.univ === a.univ && x.major === a.major && x.tname === a.tname);
+        if (!dup) apps.push(a);
+      }
+      await saveDoc(p.c, p.n, apps);
+    }
+    $("imodal").classList.remove("show");
+  } catch (e) { alert("저장 실패: " + e.message); }
+  $("isave").disabled = false;
 };
 
 /* ── CSV ── */
