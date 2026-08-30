@@ -179,16 +179,26 @@ footer b{color:var(--navy)}
       <div class="frow"><label>전형명</label><input id="f-tname" placeholder="예: 지역인재전형"></div>
     </div>
     <div class="frow2">
-      <div class="frow"><label>결과</label>
-        <select id="f-result">
-          <option>발표 전</option><option>1단계 합격</option><option>최초합격</option>
-          <option>추가합격</option><option>충원대기</option><option>불합격</option>
-        </select>
+      <div class="frow"><label>1단계 (단계별 전형)</label>
+        <select id="f-stage1"><option value="">발표 전 / 해당없음</option><option>합격</option><option>불합격</option></select>
       </div>
-      <div class="frow"><label>예비번호</label><input id="f-wait" placeholder="충원대기 시 예: 예비 3"></div>
+      <div class="frow"><label>최종결과</label>
+        <select id="f-fin"><option value="">발표 전</option><option>합격</option><option>추가합격</option><option>불합격</option></select>
+      </div>
     </div>
-    <div class="frow"><label>비고</label><input id="f-memo" placeholder="면접일, 특이사항 등"></div>
-    <label class="chk"><input type="checkbox" id="f-final"> 최종 등록 대학</label>
+    <div class="frow2">
+      <div class="frow"><label>최초후보순위(예비)</label><input id="f-rsv" placeholder="예: 30"></div>
+      <div class="frow"><label>등록여부</label>
+        <select id="f-reg"><option value="">미정</option><option value="Y">Y (등록)</option><option value="N">N (미등록)</option></select>
+      </div>
+    </div>
+    <div class="frow2">
+      <div class="frow"><label>불합격사유</label>
+        <select id="f-fail"><option value="">해당없음</option><option>미응시</option><option>최저미달</option><option>불합격</option></select>
+      </div>
+      <div class="frow"><label>면접일자</label><input id="f-iv" placeholder="예: 11.21"></div>
+    </div>
+    <div class="frow"><label>비고 (순위변동·추합내용)</label><input id="f-memo" placeholder="예: 30-20-5 추합"></div>
     <div class="mbtns">
       <button class="btn-del" id="mdel" style="display:none">삭제</button>
       <button class="btn-cancel" id="mcancel">취소</button>
@@ -228,8 +238,7 @@ const ROSTER = {
  "5": {t:"심요섭", s:[[1,"강현수"],[2,"김도훈"],[3,"김성빈"],[4,"김예찬"],[5,"서민웅"],[6,"신재민"],[7,"오영일"],[8,"유승범"],[9,"유호성"],[10,"이성빈"],[11,"이승준"],[12,"이승진"],[13,"임태훈"],[14,"장준호"],[15,"전재훈"],[16,"정윤우"],[17,"최예건"],[18,"추민석"],[19,"홍경서"]]},
  "6": {t:"조영신", s:[[1,"강태균"],[2,"김기현"],[3,"김준서"],[4,"김태영"],[5,"박민서"],[6,"박세훈"],[7,"서지완"],[8,"신수한"],[9,"신현민"],[10,"유시형"],[11,"유호준"],[12,"이도윤"],[13,"이준영"],[14,"정승환"],[15,"조승원"],[16,"조원준"],[17,"진현우"],[18,"하승범"]]}
 };
-const RESULTS = ["발표 전","1단계 합격","최초합격","추가합격","충원대기","불합격"];
-const RCLASS = {"발표 전":"b-wait","1단계 합격":"b-pass1","최초합격":"b-first","추가합격":"b-add","충원대기":"b-rsv","불합격":"b-fail"};
+const FILTERS = ["발표 전","1단계 합격","합격","추가합격","충원대기(예비)","불합격"];
 
 const app = initializeApp({ apiKey:"AIzaSyBotwjsJxit4SbOzXVVOov37Po97AieoxM", projectId:"sangdam-b97c1" });
 const db = getFirestore(app);
@@ -261,7 +270,17 @@ onSnapshot(collection(db, COL), snap => {
 
 /* ── 유틸 ── */
 const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
-const getApps = (c, n) => (DATA[`${c}-${n}`]?.apps) || [];
+// 구버전 데이터(result 문자열) → 신버전(1단계/최종결과 분리) 자동 변환
+function norm(a){
+  if (a.fin !== undefined) return a;
+  const r = a.result || "";
+  return {...a,
+    stage1: r === "1단계 합격" ? "합격" : "",
+    fin: r === "최초합격" ? "합격" : (r === "추가합격" || r === "불합격") ? r : "",
+    rsv: r === "충원대기" ? (a.wait || "") : "",
+    failReason: "", reg: a.final ? "Y" : "", iv: ""};
+}
+const getApps = (c, n) => ((DATA[`${c}-${n}`]?.apps) || []).map(norm);
 
 function allEntries(cls){
   const out = [];
@@ -275,12 +294,21 @@ function allEntries(cls){
 function counts(list){
   const k = {tot:list.length, first:0, add:0, fail:0, wait:0};
   for (const a of list) {
-    if (a.result === "최초합격") k.first++;
-    else if (a.result === "추가합격") k.add++;
-    else if (a.result === "불합격") k.fail++;
+    if (a.fin === "합격") k.first++;
+    else if (a.fin === "추가합격") k.add++;
+    else if (a.fin === "불합격") k.fail++;
     else k.wait++;
   }
   return k;
+}
+// 필터용 상태 판정
+function stateOf(a){
+  if (a.fin === "합격") return "합격";
+  if (a.fin === "추가합격") return "추가합격";
+  if (a.fin === "불합격") return "불합격";
+  if (a.rsv) return "충원대기(예비)";
+  if (a.stage1 === "합격") return "1단계 합격";
+  return "발표 전";
 }
 
 /* ── 탭 ── */
@@ -304,8 +332,14 @@ function statHtml(k){
   </div>`;
 }
 function badge(a){
-  let h = `<span class="badge ${RCLASS[a.result]||"b-wait"}">${esc(a.result||"발표 전")}${a.result==="충원대기"&&a.wait?" · "+esc(a.wait):""}</span>`;
-  if (a.final) h += `<span class="badge b-final">등록</span>`;
+  const st = stateOf(a);
+  const cls = {"합격":"b-first","추가합격":"b-add","불합격":"b-fail","충원대기(예비)":"b-rsv","1단계 합격":"b-pass1","발표 전":"b-wait"}[st];
+  let label = st === "충원대기(예비)" ? "예비 " + esc(a.rsv) : st;
+  let h = `<span class="badge ${cls}">${label}</span>`;
+  if (a.rsv && st !== "충원대기(예비)") h += ` <span class="badge b-rsv">예비 ${esc(a.rsv)}</span>`;
+  if (st === "불합격" && a.failReason) h += ` <span class="badge b-fail" style="background:#fff;border:1.5px solid #f3c5be">${esc(a.failReason)}</span>`;
+  if (a.reg === "Y") h += `<span class="badge b-final">등록 Y</span>`;
+  else if (a.reg === "N") h += `<span class="badge b-wait" style="margin-left:4px">등록 N</span>`;
   return h;
 }
 
@@ -315,13 +349,13 @@ function render(keepFocus){
   if (TAB === "all") {
     let list = allEntries("all");
     const k = counts(list);
-    if (fRes) list = list.filter(a => a.result === fRes);
+    if (fRes) list = list.filter(a => stateOf(a) === fRes);
     if (fCat) list = list.filter(a => a.cat === fCat);
     if (fQ) { const q = fQ.toLowerCase();
       list = list.filter(a => (a.univ+a.major+a.nm+(a.tname||"")).toLowerCase().includes(q)); }
     m.innerHTML = statHtml(k) + `
       <div class="filters">
-        <select id="ff-res"><option value="">결과 전체</option>${RESULTS.map(r=>`<option ${fRes===r?"selected":""}>${r}</option>`).join("")}</select>
+        <select id="ff-res"><option value="">결과 전체</option>${FILTERS.map(r=>`<option ${fRes===r?"selected":""}>${r}</option>`).join("")}</select>
         <select id="ff-cat"><option value="">전형 전체</option>${["학생부교과","학생부종합","논술","실기/특기","정시(가)","정시(나)","정시(다)","기타"].map(c=>`<option ${fCat===c?"selected":""}>${c}</option>`).join("")}</select>
         <input id="ff-q" placeholder="이름·대학·학과 검색" value="${esc(fQ)}">
       </div>
@@ -336,7 +370,7 @@ function render(keepFocus){
             <td>${a.c}</td><td>${a.n}</td><td style="font-weight:700">${esc(a.nm)}</td>
             <td style="font-weight:700">${esc(a.univ)}</td><td>${esc(a.major)}</td>
             <td><span class="tcat">${esc(a.cat)}</span></td><td>${esc(a.tname||"")}</td>
-            <td>${badge(a)}</td><td style="font-size:13px;color:var(--soft)">${esc(a.memo||"")}</td>
+            <td>${badge(a)}</td><td style="font-size:13px;color:var(--soft)">${esc([a.iv?"면접 "+a.iv:"",a.memo||""].filter(Boolean).join(" · "))}</td>
           </tr>`).join("") : `<tr><td colspan="9" class="empty">표시할 지원 내역이 없습니다. 반 탭에서 학생별로 추가하세요.</td></tr>`}
         </tbody></table></div>`;
     $("ff-res").onchange = e => { fRes = e.target.value; render(); };
@@ -388,8 +422,10 @@ function openModal(c, n, idx){
   const a = idx === null ? {} : getApps(c, n)[idx] || {};
   $("f-univ").value = a.univ || ""; $("f-major").value = a.major || "";
   $("f-cat").value = a.cat || "학생부교과"; $("f-tname").value = a.tname || "";
-  $("f-result").value = a.result || "발표 전"; $("f-wait").value = a.wait || "";
-  $("f-memo").value = a.memo || ""; $("f-final").checked = !!a.final;
+  $("f-stage1").value = a.stage1 || ""; $("f-fin").value = a.fin || "";
+  $("f-rsv").value = a.rsv || ""; $("f-reg").value = a.reg || "";
+  $("f-fail").value = a.failReason || ""; $("f-iv").value = a.iv || "";
+  $("f-memo").value = a.memo || "";
   $("mdel").style.display = idx === null ? "none" : "block";
   $("modal").classList.add("show");
   if (idx === null) $("f-univ").focus();
@@ -408,8 +444,10 @@ $("msave").onclick = async () => {
   const a = {
     univ: $("f-univ").value.trim(), major: $("f-major").value.trim(),
     cat: $("f-cat").value, tname: $("f-tname").value.trim(),
-    result: $("f-result").value, wait: $("f-wait").value.trim(),
-    memo: $("f-memo").value.trim(), final: $("f-final").checked
+    stage1: $("f-stage1").value, fin: $("f-fin").value,
+    rsv: $("f-rsv").value.trim(), reg: $("f-reg").value,
+    failReason: $("f-fail").value, iv: $("f-iv").value.trim(),
+    memo: $("f-memo").value.trim()
   };
   if (!a.univ || !a.major) { alert("대학명과 모집단위를 입력해 주세요."); return; }
   const apps = [...getApps(c, n)];
@@ -498,12 +536,11 @@ function parseSheet(ws, fname){
     const row = {tu:String(r[col.tu]||""), si:String(r[col.si]||""), tname:String(r[col.tname]||"")};
     const memoParts = [];
     if (String(r[col.min]||"").trim().toUpperCase() === "Y") memoParts.push("수능최저 有");
-    const iv = shortDate(r[col.interview]);
-    if (iv) memoParts.push("면접 " + iv);
     const an = shortDate(r[col.announce]);
     if (an) memoParts.push("발표 " + an);
     apps.push({univ, major, cat:toCat(row), tname:cleanTname(row.tname),
-      result:"발표 전", wait:"", memo:memoParts.join(" · "), final:false});
+      stage1:"", fin:"", rsv:"", reg:"", failReason:"",
+      iv:shortDate(r[col.interview]), memo:memoParts.join(" · ")});
   }
   const rosterName = ROSTER[c].s.find(s => s[0] === n)[1];
   return {c, n, nameInFile, rosterName, warn:nameInFile !== rosterName, apps};
@@ -529,7 +566,8 @@ fileInput.onchange = async () => {
     importPlan.map(p => `<div class="ifile">
       <div class="fh">${p.c}반 ${String(p.n).padStart(2,"0")}번 ${esc(p.rosterName)} — ${p.apps.length}건
         ${p.warn ? `<span class="warn">⚠ 파일의 이름(${esc(p.nameInFile)})이 명단과 다릅니다</span>` : ""}</div>
-      ${p.apps.map(a => `<div class="frow-i"><b>${esc(a.univ)}</b> ${esc(a.major)} · ${esc(a.cat)}${a.tname ? " · " + esc(a.tname) : ""}${a.memo ? ` <span style="color:#8a94a3">(${esc(a.memo)})</span>` : ""}</div>`).join("")}
+      ${p.apps.map(a => { const ex = [a.iv?"면접 "+a.iv:"", a.memo||""].filter(Boolean).join(" · ");
+        return `<div class="frow-i"><b>${esc(a.univ)}</b> ${esc(a.major)} · ${esc(a.cat)}${a.tname ? " · " + esc(a.tname) : ""}${ex ? ` <span style="color:#8a94a3">(${esc(ex)})</span>` : ""}</div>`; }).join("")}
     </div>`).join("");
   $("imodal").classList.add("show");
 };
@@ -555,8 +593,8 @@ $("isave").onclick = async () => {
 
 /* ── CSV ── */
 function downloadCsv(){
-  const rows = [["반","번호","이름","대학","모집단위","전형구분","전형명","결과","예비번호","최종등록","비고"]];
-  allEntries("all").forEach(a => rows.push([a.c, a.n, a.nm, a.univ, a.major, a.cat, a.tname||"", a.result||"", a.wait||"", a.final?"O":"", a.memo||""]));
+  const rows = [["반","번호","이름","대학","모집단위","전형구분","전형명","1단계","최종결과","불합격사유","최초후보순위","등록여부","비고","면접일자"]];
+  allEntries("all").forEach(a => rows.push([a.c, a.n, a.nm, a.univ, a.major, a.cat, a.tname||"", a.stage1||"", a.fin||"", a.failReason||"", a.rsv||"", a.reg||"", a.memo||"", a.iv||""]));
   const csv = "﻿" + rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\r\n");
   const url = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
   const aEl = document.createElement("a");
