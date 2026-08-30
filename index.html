@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3학년 대입 지원현황</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0B3E86; --navy2:#092f66; --gold:#F5B301; --gold-d:#c8920a;
+  --green:#1A9A3E; --red:#c0392b; --ink:#141a24; --soft:#3d4652;
+  --line:#b9c4d4; --lt:#eef3fa;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans KR',sans-serif;background:#f4f7fb;color:var(--ink);word-break:keep-all;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:15px}
+
+/* ── 로그인 ── */
+#gate{position:fixed;inset:0;background:linear-gradient(150deg,#0B3E86,#0d4b9e,#092f66);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.gatebox{background:#fff;border-radius:16px;padding:34px 30px;width:100%;max-width:360px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.gatebox h1{font-size:21px;font-weight:900;color:var(--navy);letter-spacing:-.02em}
+.gatebox .sub{font-size:13px;color:var(--soft);margin:6px 0 20px}
+.gatebox input{width:100%;padding:12px 14px;border:2px solid var(--line);border-radius:10px;text-align:center;font-size:16px}
+.gatebox input:focus{outline:none;border-color:var(--navy)}
+.gatebox button{width:100%;margin-top:12px;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700}
+#gateerr{color:var(--red);font-size:13px;margin-top:10px;font-weight:700;min-height:18px}
+
+/* ── 헤더 ── */
+header{background:linear-gradient(150deg,#0B3E86,#0d4b9e,#092f66);color:#fff;padding:18px 16px 14px;position:relative}
+header::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:linear-gradient(90deg,var(--gold),var(--green))}
+.hwrap{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+header .en{color:var(--gold);font-size:11px;font-weight:700;letter-spacing:.14em}
+header h1{font-size:20px;font-weight:900;letter-spacing:-.02em}
+header .live{font-size:12px;color:#cfe0f7;display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+
+/* ── 탭 ── */
+nav{background:#fff;border-bottom:2px solid var(--line);position:sticky;top:0;z-index:20}
+.tabs{max-width:1100px;margin:0 auto;display:flex;overflow-x:auto}
+.tab{flex:1;min-width:76px;padding:12px 6px;border:none;background:none;font-size:15px;font-weight:700;color:var(--soft);border-bottom:3px solid transparent;white-space:nowrap}
+.tab.on{color:var(--navy);border-bottom-color:var(--gold)}
+.tab .cnt{font-size:11px;color:#8a94a3;font-weight:500;display:block}
+.tab.on .cnt{color:var(--gold-d)}
+
+main{max-width:1100px;margin:0 auto;padding:16px 12px 60px}
+
+/* ── 통계 타일 ── */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px;margin-bottom:14px}
+.stat{background:#fff;border:2px solid var(--line);border-radius:12px;padding:12px 8px;text-align:center}
+.stat .lb{font-size:12px;font-weight:700;color:var(--soft)}
+.stat .v{font-size:24px;font-weight:900;color:var(--navy);line-height:1.2}
+.stat.g .v{color:var(--green)} .stat.gd .v{color:var(--gold-d)} .stat.r .v{color:var(--red)}
+
+/* ── 필터 ── */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.filters select,.filters input{padding:9px 12px;border:2px solid var(--line);border-radius:10px;background:#fff;font-size:14px}
+.filters input{flex:1;min-width:140px}
+.filters select:focus,.filters input:focus{outline:none;border-color:var(--navy)}
+
+/* ── 전체 테이블 ── */
+.tblwrap{background:#fff;border:2px solid var(--line);border-radius:12px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:760px}
+th{background:var(--navy);color:#fff;padding:10px 8px;font-size:13px;font-weight:700;white-space:nowrap;text-align:left}
+td{padding:9px 8px;border-top:1px solid #e3e9f2;vertical-align:middle}
+tr.rowbtn{cursor:pointer}
+tr.rowbtn:hover td{background:var(--lt)}
+.empty{padding:36px;text-align:center;color:var(--soft);font-size:14px}
+
+/* ── 배지 ── */
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12.5px;font-weight:700;white-space:nowrap}
+.b-wait{background:#eceff4;color:var(--soft)}
+.b-pass1{background:var(--lt);color:var(--navy);border:1px solid #b9cdec}
+.b-first{background:#e3f4e8;color:var(--green)}
+.b-add{background:#fdf3d5;color:var(--gold-d)}
+.b-rsv{background:#fff;color:var(--gold-d);border:1.5px dashed var(--gold-d)}
+.b-fail{background:#fbe9e7;color:var(--red)}
+.b-final{background:var(--green);color:#fff;margin-left:4px}
+.tcat{display:inline-block;padding:2px 8px;border-radius:6px;background:var(--lt);color:var(--navy);font-size:12px;font-weight:700;border:1px solid #cbd9ee;white-space:nowrap}
+
+/* ── 반별 학생 카드 ── */
+.scard{background:#fff;border:2px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.shead{display:flex;align-items:center;gap:10px;padding:11px 14px;background:#fbfcfe;border-bottom:1px solid #e6ecf5}
+.snum{background:var(--navy);color:#fff;font-weight:900;font-size:13px;border-radius:9px;min-width:38px;text-align:center;padding:6px 0}
+.sname{font-weight:900;font-size:16px;color:var(--ink)}
+.ssum{font-size:12.5px;color:var(--soft);margin-left:auto;text-align:right}
+.addbtn{background:#fff;border:2px solid var(--navy);color:var(--navy);border-radius:9px;padding:6px 12px;font-size:13px;font-weight:700;white-space:nowrap}
+.addbtn:hover{background:var(--lt)}
+.entries{padding:4px 0}
+.entry{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-top:1px solid #f0f3f8;flex-wrap:wrap}
+.entry:first-child{border-top:none}
+.entry:hover{background:var(--lt)}
+.e-univ{font-weight:700;font-size:14.5px;color:var(--ink)}
+.e-major{font-size:13.5px;color:var(--soft)}
+.e-type{font-size:12.5px;color:var(--soft)}
+.e-right{margin-left:auto;display:flex;align-items:center;gap:4px}
+.noentry{padding:12px 14px;font-size:13px;color:#9aa4b2}
+
+/* ── 모달 ── */
+#modal{position:fixed;inset:0;background:rgba(9,20,40,.55);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:20px;overflow-y:auto}
+#modal.show{display:flex}
+.mbox{background:#fff;border-radius:16px;width:100%;max-width:480px;padding:24px 22px;margin-top:4vh;box-shadow:0 24px 70px rgba(0,0,0,.35)}
+.mbox h2{font-size:17px;font-weight:900;color:var(--navy);padding-left:12px;position:relative;margin-bottom:16px}
+.mbox h2::before{content:"";position:absolute;left:0;top:3px;width:6px;height:17px;background:var(--gold);border-radius:3px}
+.frow{margin-bottom:12px}
+.frow label{display:block;font-size:13px;font-weight:700;color:var(--soft);margin-bottom:5px}
+.frow input,.frow select{width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:10px}
+.frow input:focus,.frow select:focus{outline:none;border-color:var(--navy)}
+.frow2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--green);margin:14px 0 4px}
+.chk input{width:18px;height:18px;accent-color:var(--green)}
+.mbtns{display:flex;gap:8px;margin-top:18px}
+.mbtns button{flex:1;padding:12px;border-radius:10px;font-size:15px;font-weight:700;border:none}
+.btn-save{background:var(--navy);color:#fff}
+.btn-cancel{background:#eceff4;color:var(--soft)}
+.btn-del{background:#fff;color:var(--red);border:2px solid var(--red)!important;flex:0 0 auto;padding:12px 16px!important}
+
+/* ── 기타 ── */
+.toolrow{display:flex;justify-content:flex-end;margin-bottom:10px}
+.csvbtn{background:#fff;border:2px solid var(--line);border-radius:9px;padding:7px 14px;font-size:13px;font-weight:700;color:var(--soft)}
+.csvbtn:hover{border-color:var(--navy);color:var(--navy)}
+footer{text-align:center;font-size:12px;color:#8a94a3;padding:24px 0 40px}
+footer b{color:var(--navy)}
+@media(max-width:600px){
+  table{min-width:680px}
+  header h1{font-size:17px}
+}
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gatebox">
+    <h1>3학년 대입 지원현황</h1>
+    <div class="sub">호남고등학교 · 2027학년도 대입 · 교사 전용</div>
+    <input type="password" id="pw" placeholder="비밀번호" autocomplete="off">
+    <button id="pwbtn">입장</button>
+    <div id="gateerr"></div>
+  </div>
+</div>
+
+<header>
+  <div class="hwrap">
+    <div>
+      <div class="en">HONAM HIGH SCHOOL · CLASS OF 2027</div>
+      <h1>3학년 대입 지원현황</h1>
+    </div>
+    <div class="live"><span class="dot"></span>실시간 공유 — 수정하면 모든 선생님 화면에 바로 반영</div>
+  </div>
+</header>
+
+<nav><div class="tabs" id="tabs"></div></nav>
+
+<main id="main"></main>
+
+<div id="modal">
+  <div class="mbox">
+    <h2 id="mtitle">지원 추가</h2>
+    <div class="frow"><label>대학명 *</label><input id="f-univ" placeholder="예: 전북대"></div>
+    <div class="frow"><label>모집단위(학과) *</label><input id="f-major" placeholder="예: 지구환경과학과"></div>
+    <div class="frow2">
+      <div class="frow"><label>전형 구분 *</label>
+        <select id="f-cat">
+          <option>학생부교과</option><option>학생부종합</option><option>논술</option>
+          <option>실기/특기</option><option>정시(가)</option><option>정시(나)</option>
+          <option>정시(다)</option><option>기타</option>
+        </select>
+      </div>
+      <div class="frow"><label>전형명</label><input id="f-tname" placeholder="예: 지역인재전형"></div>
+    </div>
+    <div class="frow2">
+      <div class="frow"><label>결과</label>
+        <select id="f-result">
+          <option>발표 전</option><option>1단계 합격</option><option>최초합격</option>
+          <option>추가합격</option><option>충원대기</option><option>불합격</option>
+        </select>
+      </div>
+      <div class="frow"><label>예비번호</label><input id="f-wait" placeholder="충원대기 시 예: 예비 3"></div>
+    </div>
+    <div class="frow"><label>비고</label><input id="f-memo" placeholder="면접일, 특이사항 등"></div>
+    <label class="chk"><input type="checkbox" id="f-final"> 최종 등록 대학</label>
+    <div class="mbtns">
+      <button class="btn-del" id="mdel" style="display:none">삭제</button>
+      <button class="btn-cancel" id="mcancel">취소</button>
+      <button class="btn-save" id="msave">저장</button>
+    </div>
+  </div>
+</div>
+
+<footer>호남고등학교 3학년부 · 2027학년도 대입 &nbsp;|&nbsp; 제작 · <b>호남고 조영신</b></footer>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { getFirestore, collection, onSnapshot, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+const PASS = "honam1234";
+const ROSTER = {
+ "1": {t:"이지원", s:[[1,"김은찬"],[2,"김청우"],[3,"김하준"],[4,"김현서"],[5,"박예준"],[6,"박태영"],[7,"신이현"],[8,"양하랑"],[9,"윤도현"],[10,"이경엽"],[11,"이은겸"],[12,"이정우"],[13,"이창헌"],[14,"이태희"],[15,"이현호"],[16,"장민준"],[17,"장연범"],[18,"전주형"],[19,"정승재"],[20,"조예찬"],[21,"최성우"]]},
+ "2": {t:"신채린", s:[[1,"강민광"],[2,"고의정"],[3,"권현서"],[4,"노승우"],[5,"박민수"],[6,"박지후"],[7,"박철웅"],[8,"백지훈"],[9,"송호준"],[10,"안석현"],[11,"안수현"],[12,"양채완"],[13,"오영현"],[14,"오지우"],[15,"유성민"],[16,"이서우"],[17,"이서진"],[18,"이승로"],[19,"이승주"],[20,"임명찬"],[21,"임현후"]]},
+ "3": {t:"류정현", s:[[1,"김균태"],[2,"김민석"],[3,"김성윤"],[4,"김승준"],[5,"김윤호"],[6,"김지환"],[7,"김형민"],[8,"노동완"],[9,"민환"],[10,"박재현"],[11,"박태희"],[12,"손연우"],[13,"신지용"],[14,"안정언"],[15,"안준성"],[16,"이대용"],[17,"이산"],[18,"이성훈"],[19,"이한샘"],[20,"정승욱"],[21,"홍종성"]]},
+ "4": {t:"박정민", s:[[1,"강동훈"],[2,"강정우"],[3,"김건우"],[4,"김관유"],[5,"김동윤"],[6,"김민준"],[7,"김세진"],[8,"김영준"],[9,"김현준"],[10,"문관후"],[11,"문준우"],[12,"박윤환"],[13,"박지강"],[14,"유동언"],[15,"유지안"],[16,"이호열"],[17,"한석"],[18,"허정관"]]},
+ "5": {t:"심요섭", s:[[1,"강현수"],[2,"김도훈"],[3,"김성빈"],[4,"김예찬"],[5,"서민웅"],[6,"신재민"],[7,"오영일"],[8,"유승범"],[9,"유호성"],[10,"이성빈"],[11,"이승준"],[12,"이승진"],[13,"임태훈"],[14,"장준호"],[15,"전재훈"],[16,"정윤우"],[17,"최예건"],[18,"추민석"],[19,"홍경서"]]},
+ "6": {t:"조영신", s:[[1,"강태균"],[2,"김기현"],[3,"김준서"],[4,"김태영"],[5,"박민서"],[6,"박세훈"],[7,"서지완"],[8,"신수한"],[9,"신현민"],[10,"유시형"],[11,"유호준"],[12,"이도윤"],[13,"이준영"],[14,"정승환"],[15,"조승원"],[16,"조원준"],[17,"진현우"],[18,"하승범"]]}
+};
+const RESULTS = ["발표 전","1단계 합격","최초합격","추가합격","충원대기","불합격"];
+const RCLASS = {"발표 전":"b-wait","1단계 합격":"b-pass1","최초합격":"b-first","추가합격":"b-add","충원대기":"b-rsv","불합격":"b-fail"};
+
+const app = initializeApp({ apiKey:"AIzaSyBotwjsJxit4SbOzXVVOov37Po97AieoxM", projectId:"sangdam-b97c1" });
+const db = getFirestore(app);
+const COL = "pw_jinhak_apps";
+
+const $ = id => document.getElementById(id);
+let DATA = {};          // docId "반-번호" -> {apps:[...]}
+let TAB = "all";        // "all" | "1".."6"
+let fRes = "", fCat = "", fQ = "";
+let editCtx = null;     // {c, n, idx|null}
+
+/* ── 로그인 ── */
+function tryLogin(){
+  if ($("pw").value === PASS) {
+    sessionStorage.setItem("jh_auth","1");
+    $("gate").style.display = "none";
+  } else { $("gateerr").textContent = "비밀번호가 올바르지 않습니다."; $("pw").value = ""; }
+}
+$("pwbtn").onclick = tryLogin;
+$("pw").addEventListener("keydown", e => { if (e.key === "Enter") tryLogin(); });
+if (sessionStorage.getItem("jh_auth") === "1") $("gate").style.display = "none";
+
+/* ── 실시간 구독 ── */
+onSnapshot(collection(db, COL), snap => {
+  DATA = {};
+  snap.forEach(d => DATA[d.id] = d.data());
+  render();
+});
+
+/* ── 유틸 ── */
+const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const getApps = (c, n) => (DATA[`${c}-${n}`]?.apps) || [];
+
+function allEntries(cls){
+  const out = [];
+  for (const c of Object.keys(ROSTER)) {
+    if (cls !== "all" && c !== cls) continue;
+    for (const [n, nm] of ROSTER[c].s)
+      getApps(c, n).forEach((a, idx) => out.push({c, n, nm, idx, ...a}));
+  }
+  return out;
+}
+function counts(list){
+  const k = {tot:list.length, first:0, add:0, fail:0, wait:0};
+  for (const a of list) {
+    if (a.result === "최초합격") k.first++;
+    else if (a.result === "추가합격") k.add++;
+    else if (a.result === "불합격") k.fail++;
+    else k.wait++;
+  }
+  return k;
+}
+
+/* ── 탭 ── */
+function renderTabs(){
+  const mk = (id, label) => {
+    const k = counts(allEntries(id));
+    return `<button class="tab ${TAB===id?"on":""}" data-tab="${id}">${label}<span class="cnt">${k.tot}건 · 합 ${k.first+k.add}</span></button>`;
+  };
+  $("tabs").innerHTML = mk("all","전체") + Object.keys(ROSTER).map(c => mk(c, c+"반")).join("");
+  document.querySelectorAll(".tab").forEach(b => b.onclick = () => { TAB = b.dataset.tab; render(); });
+}
+
+/* ── 본문 ── */
+function statHtml(k){
+  return `<div class="stats">
+    <div class="stat"><div class="lb">지원 건수</div><div class="v">${k.tot}</div></div>
+    <div class="stat g"><div class="lb">최초합격</div><div class="v">${k.first}</div></div>
+    <div class="stat gd"><div class="lb">추가합격</div><div class="v">${k.add}</div></div>
+    <div class="stat r"><div class="lb">불합격</div><div class="v">${k.fail}</div></div>
+    <div class="stat"><div class="lb">발표 전·대기</div><div class="v">${k.wait}</div></div>
+  </div>`;
+}
+function badge(a){
+  let h = `<span class="badge ${RCLASS[a.result]||"b-wait"}">${esc(a.result||"발표 전")}${a.result==="충원대기"&&a.wait?" · "+esc(a.wait):""}</span>`;
+  if (a.final) h += `<span class="badge b-final">등록</span>`;
+  return h;
+}
+
+function render(keepFocus){
+  renderTabs();
+  const m = $("main");
+  if (TAB === "all") {
+    let list = allEntries("all");
+    const k = counts(list);
+    if (fRes) list = list.filter(a => a.result === fRes);
+    if (fCat) list = list.filter(a => a.cat === fCat);
+    if (fQ) { const q = fQ.toLowerCase();
+      list = list.filter(a => (a.univ+a.major+a.nm+(a.tname||"")).toLowerCase().includes(q)); }
+    m.innerHTML = statHtml(k) + `
+      <div class="filters">
+        <select id="ff-res"><option value="">결과 전체</option>${RESULTS.map(r=>`<option ${fRes===r?"selected":""}>${r}</option>`).join("")}</select>
+        <select id="ff-cat"><option value="">전형 전체</option>${["학생부교과","학생부종합","논술","실기/특기","정시(가)","정시(나)","정시(다)","기타"].map(c=>`<option ${fCat===c?"selected":""}>${c}</option>`).join("")}</select>
+        <input id="ff-q" placeholder="이름·대학·학과 검색" value="${esc(fQ)}">
+      </div>
+      <div class="toolrow"><button class="csvbtn" id="csv">⬇ 엑셀(CSV) 다운로드</button></div>
+      <div class="tblwrap"><table>
+        <thead><tr><th>반</th><th>번호</th><th>이름</th><th>대학</th><th>모집단위</th><th>전형</th><th>전형명</th><th>결과</th><th>비고</th></tr></thead>
+        <tbody>${list.length ? list.map(a => `
+          <tr class="rowbtn" data-c="${a.c}" data-n="${a.n}" data-i="${a.idx}">
+            <td>${a.c}</td><td>${a.n}</td><td style="font-weight:700">${esc(a.nm)}</td>
+            <td style="font-weight:700">${esc(a.univ)}</td><td>${esc(a.major)}</td>
+            <td><span class="tcat">${esc(a.cat)}</span></td><td>${esc(a.tname||"")}</td>
+            <td>${badge(a)}</td><td style="font-size:13px;color:var(--soft)">${esc(a.memo||"")}</td>
+          </tr>`).join("") : `<tr><td colspan="9" class="empty">표시할 지원 내역이 없습니다. 반 탭에서 학생별로 추가하세요.</td></tr>`}
+        </tbody></table></div>`;
+    $("ff-res").onchange = e => { fRes = e.target.value; render(); };
+    $("ff-cat").onchange = e => { fCat = e.target.value; render(); };
+    const q = $("ff-q");
+    q.oninput = e => { fQ = e.target.value; render(true); };
+    if (keepFocus) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+    $("csv").onclick = downloadCsv;
+    m.querySelectorAll("tr.rowbtn").forEach(tr => tr.onclick = () => openModal(tr.dataset.c, +tr.dataset.n, +tr.dataset.i));
+  } else {
+    const c = TAB, k = counts(allEntries(c));
+    m.innerHTML = statHtml(k) +
+      `<div style="font-size:13px;color:var(--soft);margin-bottom:10px">담임 ${ROSTER[c].t} 선생님 · 학생 ${ROSTER[c].s.length}명 — 지원 내역을 누르면 결과를 수정할 수 있습니다.</div>` +
+      ROSTER[c].s.map(([n, nm]) => {
+        const apps = getApps(c, n);
+        const kk = counts(apps);
+        return `<div class="scard">
+          <div class="shead">
+            <div class="snum">${String(n).padStart(2,"0")}</div>
+            <div class="sname">${esc(nm)}</div>
+            <div class="ssum">${apps.length ? `${apps.length}건 · <b style="color:var(--green)">합 ${kk.first+kk.add}</b> · <span style="color:var(--red)">불 ${kk.fail}</span>` : ""}</div>
+            <button class="addbtn" data-c="${c}" data-n="${n}">＋ 지원 추가</button>
+          </div>
+          <div class="entries">${apps.length ? apps.map((a, i) => `
+            <div class="entry" data-c="${c}" data-n="${n}" data-i="${i}">
+              <span class="e-univ">${esc(a.univ)}</span>
+              <span class="e-major">${esc(a.major)}</span>
+              <span class="tcat">${esc(a.cat)}</span>
+              ${a.tname ? `<span class="e-type">${esc(a.tname)}</span>` : ""}
+              <span class="e-right">${badge(a)}</span>
+            </div>`).join("") : `<div class="noentry">아직 입력된 지원 내역이 없습니다.</div>`}
+          </div></div>`;
+      }).join("");
+    m.querySelectorAll(".addbtn").forEach(b => b.onclick = () => openModal(b.dataset.c, +b.dataset.n, null));
+    m.querySelectorAll(".entry").forEach(el => el.onclick = () => openModal(el.dataset.c, +el.dataset.n, +el.dataset.i));
+  }
+}
+
+/* ── 모달 ── */
+function openModal(c, n, idx){
+  editCtx = {c, n, idx};
+  const nm = ROSTER[c].s.find(s => s[0] === n)[1];
+  $("mtitle").textContent = `${c}반 ${String(n).padStart(2,"0")}번 ${nm} — ${idx === null ? "지원 추가" : "수정"}`;
+  const a = idx === null ? {} : getApps(c, n)[idx] || {};
+  $("f-univ").value = a.univ || ""; $("f-major").value = a.major || "";
+  $("f-cat").value = a.cat || "학생부교과"; $("f-tname").value = a.tname || "";
+  $("f-result").value = a.result || "발표 전"; $("f-wait").value = a.wait || "";
+  $("f-memo").value = a.memo || ""; $("f-final").checked = !!a.final;
+  $("mdel").style.display = idx === null ? "none" : "block";
+  $("modal").classList.add("show");
+  if (idx === null) $("f-univ").focus();
+}
+function closeModal(){ $("modal").classList.remove("show"); editCtx = null; }
+$("mcancel").onclick = closeModal;
+$("modal").addEventListener("click", e => { if (e.target === $("modal")) closeModal(); });
+
+async function saveDoc(c, n, apps){
+  const nm = ROSTER[c].s.find(s => s[0] === n)[1];
+  await setDoc(doc(db, COL, `${c}-${n}`), { c, n, name:nm, apps, upd:new Date().toISOString() });
+}
+$("msave").onclick = async () => {
+  if (!editCtx) return;
+  const {c, n, idx} = editCtx;
+  const a = {
+    univ: $("f-univ").value.trim(), major: $("f-major").value.trim(),
+    cat: $("f-cat").value, tname: $("f-tname").value.trim(),
+    result: $("f-result").value, wait: $("f-wait").value.trim(),
+    memo: $("f-memo").value.trim(), final: $("f-final").checked
+  };
+  if (!a.univ || !a.major) { alert("대학명과 모집단위를 입력해 주세요."); return; }
+  const apps = [...getApps(c, n)];
+  if (idx === null) apps.push(a); else apps[idx] = a;
+  $("msave").disabled = true;
+  try { await saveDoc(c, n, apps); closeModal(); }
+  catch (e) { alert("저장 실패: " + e.message); }
+  $("msave").disabled = false;
+};
+$("mdel").onclick = async () => {
+  if (!editCtx || editCtx.idx === null) return;
+  if (!confirm("이 지원 내역을 삭제할까요?")) return;
+  const {c, n, idx} = editCtx;
+  const apps = getApps(c, n).filter((_, i) => i !== idx);
+  try { await saveDoc(c, n, apps); closeModal(); }
+  catch (e) { alert("삭제 실패: " + e.message); }
+};
+
+/* ── CSV ── */
+function downloadCsv(){
+  const rows = [["반","번호","이름","대학","모집단위","전형구분","전형명","결과","예비번호","최종등록","비고"]];
+  allEntries("all").forEach(a => rows.push([a.c, a.n, a.nm, a.univ, a.major, a.cat, a.tname||"", a.result||"", a.wait||"", a.final?"O":"", a.memo||""]));
+  const csv = "﻿" + rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\r\n");
+  const url = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
+  const aEl = document.createElement("a");
+  aEl.href = url; aEl.download = "대입지원현황.csv"; aEl.click();
+  URL.revokeObjectURL(url);
+}
+
+render();
+</script>
+</body>
+</html>
