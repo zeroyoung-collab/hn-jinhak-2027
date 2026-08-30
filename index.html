@@ -142,7 +142,7 @@ footer b{color:var(--navy)}
 <div id="gate">
   <div class="gatebox">
     <h1>3학년 대입 지원현황</h1>
-    <div class="sub">호남고등학교 · 2027학년도 대입 · 교사 전용</div>
+    <div class="sub">호남고등학교 · 2026학년도(2027학년도 대입) · 교사 전용</div>
     <input type="password" id="pw" placeholder="비밀번호" autocomplete="off">
     <button id="pwbtn">입장</button>
     <div id="gateerr"></div>
@@ -152,8 +152,8 @@ footer b{color:var(--navy)}
 <header>
   <div class="hwrap">
     <div>
-      <div class="en">HONAM HIGH SCHOOL · CLASS OF 2027</div>
-      <h1>3학년 대입 지원현황</h1>
+      <div class="en">HONAM HIGH SCHOOL · 2026 · CLASS OF 2027</div>
+      <h1>3학년 대입 지원현황 <span style="font-size:13px;font-weight:700;color:var(--gold)">2026학년도</span></h1>
     </div>
     <div class="live"><span class="dot"></span>실시간 공유 — 수정하면 모든 선생님 화면에 바로 반영</div>
   </div>
@@ -222,7 +222,7 @@ footer b{color:var(--navy)}
   </div>
 </div>
 
-<footer>호남고등학교 3학년부 · 2027학년도 대입 &nbsp;|&nbsp; 제작 · <b>호남고 조영신</b></footer>
+<footer>호남고등학교 3학년부 · 2026학년도(2027학년도 대입) &nbsp;|&nbsp; 제작 · <b>호남고 조영신</b></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script type="module">
@@ -598,7 +598,7 @@ function downloadCsv(){
   const csv = "﻿" + rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\r\n");
   const url = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
   const aEl = document.createElement("a");
-  aEl.href = url; aEl.download = "대입지원현황.csv"; aEl.click();
+  aEl.href = url; aEl.download = "2026학년도_대입지원현황.csv"; aEl.click();
   URL.revokeObjectURL(url);
 }
 
