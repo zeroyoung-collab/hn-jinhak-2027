@@ -82,7 +82,7 @@ tr.rowbtn:hover td{background:#f8f5ec}
 /* ── 일정 칩 (1차 발표·최저·면접·최종 발표) ── */
 .dtchip{display:inline-block;font-size:12px;font-weight:800;padding:1px 7px;border:1.5px solid;white-space:nowrap}
 .dt-ann1{color:var(--navy);border-color:#9fb4d6;background:#f0f5fc}
-.dt-min{color:var(--red);border-color:#e0a9a2;background:#fdf0ee}
+.dt-min{color:var(--red);border-color:#e0a9a2;background:#fdf0ee;max-width:min(420px,70vw);overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
 .dt-iv{color:#127a30;border-color:#9fd0ab;background:#eef8f0}
 .dt-ann{color:var(--gold-d);border-color:#e2c86e;background:#fdf7e2}
 
@@ -236,7 +236,13 @@ footer b{color:var(--navy)}
       <div class="frow"><label>면접일자</label><input id="f-iv" placeholder="예: 11.21"></div>
       <div class="frow"><label>최종 발표</label><input id="f-ann" placeholder="예: 12.5"></div>
     </div>
-    <label class="chk" style="color:var(--red);margin:2px 0 10px"><input type="checkbox" id="f-min" style="accent-color:var(--red)"> 수능최저 있음</label>
+    <div class="frow">
+      <label>수능최저 <span style="font-weight:500;color:#8a94a3">— 체크 후 기준 내용은 자유 입력(비워도 됨)</span></label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="checkbox" id="f-min" style="width:18px;height:18px;flex:0 0 auto;accent-color:var(--red)">
+        <input id="f-mintxt" placeholder="예: 수학 포함 2개 영역 등급 합 8 이내" style="flex:1">
+      </div>
+    </div>
     <div class="frow"><label>불합격사유</label>
       <select id="f-fail"><option value="">해당없음</option><option>미응시</option><option>최저미달</option><option>불합격</option></select>
     </div>
@@ -254,7 +260,7 @@ footer b{color:var(--navy)}
     <h2>엑셀 불러오기 — 확인</h2>
     <div id="ibody" style="max-height:50vh;overflow-y:auto;margin-bottom:6px"></div>
     <div class="frow" style="display:flex;gap:16px;font-size:14px;font-weight:700">
-      <label style="display:flex;align-items:center;gap:6px"><input type="radio" name="imode" value="add" checked> 기존 내역에 추가(중복 제외)</label>
+      <label style="display:flex;align-items:center;gap:6px"><input type="radio" name="imode" value="add" checked> 기존 내역에 추가(중복은 빈 항목만 채움)</label>
       <label style="display:flex;align-items:center;gap:6px;color:var(--red)"><input type="radio" name="imode" value="replace"> 기존 내역 교체</label>
     </div>
     <div class="mbtns">
@@ -320,10 +326,10 @@ function norm(a){
     stage1: r === "1단계 합격" ? "합격" : "",
     fin: r === "최초합격" ? "합격" : (r === "추가합격" || r === "불합격") ? r : "",
     rsv: r === "충원대기" ? (a.wait || "") : "",
-    failReason: "", reg: a.final ? "Y" : "", iv: "", ann: "", ann1: "", min: ""};
+    failReason: "", reg: a.final ? "Y" : "", iv: "", ann: "", ann1: "", min: "", minTxt: ""};
 }
-// 수능최저: 전용 필드 우선, 구버전은 비고의 "수능최저" 문구로 판정
-const hasMin = a => a.min === "Y" || /수능최저/.test(a.memo || "");
+// 수능최저: 전용 필드(플래그·기준 원문) 우선, 구버전은 비고의 "수능최저" 문구로 판정
+const hasMin = a => a.min === "Y" || !!a.minTxt || /수능최저/.test(a.memo || "");
 // 발표일: 전용 필드 우선, 없으면 엑셀 불러오기 구버전이 비고에 남긴 "발표 ○.○"에서 추출
 function annOf(a){
   if (a.ann) return a.ann;
@@ -450,16 +456,30 @@ function badge(a){
   return h;
 }
 
-function render(keepFocus){
+function render(){
   renderTabs();
   const m = $("main");
   if (TAB === "all") {
-    let list = allEntries("all");
-    const k = counts(list);
-    if (fRes) list = list.filter(a => stateOf(a) === fRes);
-    if (fCat) list = list.filter(a => a.cat === fCat);
-    if (fQ) { const q = fQ.toLowerCase();
-      list = list.filter(a => (a.univ+a.major+a.nm+(a.tname||"")).toLowerCase().includes(q)); }
+    const k = counts(allEntries("all"));
+    // 검색 입력 중 재렌더링하면 한글 조합(IME)이 끊기므로, 입력창은 그대로 두고 결과 표만 갱신
+    const listHtml = () => {
+      let list = allEntries("all");
+      if (fRes) list = list.filter(a => stateOf(a) === fRes);
+      if (fCat) list = list.filter(a => a.cat === fCat);
+      if (fQ) { const q = fQ.toLowerCase();
+        list = list.filter(a => (a.univ+a.major+a.nm+(a.tname||"")).toLowerCase().includes(q)); }
+      return `<div class="tblwrap"><table>
+        <thead><tr><th>반</th><th>번호</th><th>이름</th><th>대학</th><th>모집단위</th><th>전형</th><th>전형명</th><th>결과</th><th>비고</th></tr></thead>
+        <tbody>${list.length ? list.map(a => `
+          <tr class="rowbtn" data-c="${a.c}" data-n="${a.n}" data-i="${a.idx}">
+            <td>${a.c}</td><td>${a.n}</td><td style="font-weight:700">${esc(a.nm)}</td>
+            <td style="font-weight:700">${esc(a.univ)}</td><td>${esc(a.major)}</td>
+            <td><span class="tcat">${esc(a.cat)}</span></td><td>${esc(a.tname||"")}</td>
+            <td>${badge(a)}</td><td style="font-size:13px;color:var(--soft)">${esc([a.ann1?"1차 "+a.ann1:"",hasMin(a)?"최저":"",a.iv?"면접 "+a.iv:"",a.ann?"발표 "+a.ann:"",a.memo||""].filter(Boolean).join(" · "))}</td>
+          </tr>`).join("") : `<tr><td colspan="9" class="empty">표시할 지원 내역이 없습니다. 반 탭에서 학생별로 추가하세요.</td></tr>`}
+        </tbody></table></div>`;
+    };
+    const wireRows = () => m.querySelectorAll("tr.rowbtn").forEach(tr => tr.onclick = () => openModal(tr.dataset.c, +tr.dataset.n, +tr.dataset.i));
     m.innerHTML = statHtml(k) + annAlertHtml() + `
       <div class="filters">
         <select id="ff-res"><option value="">결과 전체</option>${FILTERS.map(r=>`<option ${fRes===r?"selected":""}>${r}</option>`).join("")}</select>
@@ -470,27 +490,18 @@ function render(keepFocus){
         <button class="csvbtn" id="xlsin">📥 엑셀 불러오기 (관심대학·수시진학관리)</button>
         <button class="csvbtn" id="csv">⬇ 엑셀(CSV) 다운로드</button>
       </div>
-      <div class="tblwrap"><table>
-        <thead><tr><th>반</th><th>번호</th><th>이름</th><th>대학</th><th>모집단위</th><th>전형</th><th>전형명</th><th>결과</th><th>비고</th></tr></thead>
-        <tbody>${list.length ? list.map(a => `
-          <tr class="rowbtn" data-c="${a.c}" data-n="${a.n}" data-i="${a.idx}">
-            <td>${a.c}</td><td>${a.n}</td><td style="font-weight:700">${esc(a.nm)}</td>
-            <td style="font-weight:700">${esc(a.univ)}</td><td>${esc(a.major)}</td>
-            <td><span class="tcat">${esc(a.cat)}</span></td><td>${esc(a.tname||"")}</td>
-            <td>${badge(a)}</td><td style="font-size:13px;color:var(--soft)">${esc([a.ann1?"1차 "+a.ann1:"",hasMin(a)?"최저":"",a.iv?"면접 "+a.iv:"",a.ann?"발표 "+a.ann:"",a.memo||""].filter(Boolean).join(" · "))}</td>
-          </tr>`).join("") : `<tr><td colspan="9" class="empty">표시할 지원 내역이 없습니다. 반 탭에서 학생별로 추가하세요.</td></tr>`}
-        </tbody></table></div>`;
+      <div id="res-all">` + listHtml() + `</div>`;
     $("ff-res").onchange = e => { fRes = e.target.value; render(); };
     $("ff-cat").onchange = e => { fCat = e.target.value; render(); };
-    const q = $("ff-q");
-    q.oninput = e => { fQ = e.target.value; render(true); };
-    if (keepFocus) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+    $("ff-q").oninput = e => { fQ = e.target.value; $("res-all").innerHTML = listHtml(); wireRows(); };
     $("csv").onclick = downloadCsv;
     $("xlsin").onclick = () => $("xlsfile").click();
     wireAnnBox();
-    m.querySelectorAll("tr.rowbtn").forEach(tr => tr.onclick = () => openModal(tr.dataset.c, +tr.dataset.n, +tr.dataset.i));
+    wireRows();
   } else if (TAB === "univ") {
     const k = counts(allEntries("all"));
+    // 검색 입력 중 재렌더링하면 한글 조합(IME)이 끊기므로, 입력창은 그대로 두고 결과만 갱신
+    const groupsHtml = () => {
     const q = fQ.toLowerCase();
     let groups = groupByUniv(allEntries("all"))
       .map(g => ({...g, view: g.items.filter(a =>
@@ -506,19 +517,7 @@ function render(keepFocus){
       uSort === "iv" ? (a, b) => Math.min(...a.view.map(ivKeyOf)) - Math.min(...b.view.map(ivKeyOf)) || a.name.localeCompare(b.name, "ko") :
       (a, b) => b.view.length - a.view.length || a.name.localeCompare(b.name, "ko"));
     if (uSort === "iv") groups.forEach(g => g.view.sort((a, b) => ivKeyOf(a) - ivKeyOf(b)));
-    m.innerHTML = statHtml(k) + annAlertHtml() + `
-      <div class="filters">
-        <select id="ff-sort">
-          <option value="cnt" ${uSort==="cnt"?"selected":""}>지원 많은 순</option>
-          <option value="pass" ${uSort==="pass"?"selected":""}>합격 많은 순</option>
-          <option value="iv" ${uSort==="iv"?"selected":""}>면접 빠른 순</option>
-          <option value="name" ${uSort==="name"?"selected":""}>대학명 가나다순</option>
-        </select>
-        <select id="ff-res"><option value="">결과 전체</option>${FILTERS.map(r=>`<option ${fRes===r?"selected":""}>${r}</option>`).join("")}</select>
-        <select id="ff-cat"><option value="">전형 전체</option>${["학생부교과","학생부종합","논술","실기/특기","정시(가)","정시(나)","정시(다)","기타"].map(c=>`<option ${fCat===c?"selected":""}>${c}</option>`).join("")}</select>
-        <input id="ff-q" placeholder="이름·대학·학과 검색" value="${esc(fQ)}">
-      </div>` +
-      (groups.length ? groups.map(g => {
+    return (groups.length ? groups.map(g => {
         const uniq = f => [...new Set(g.view.map(f).filter(Boolean))].sort((a, b) => annKey(a) - annKey(b));
         const d1 = uniq(a => a.ann1 || ""), dIv = uniq(a => a.iv || ""), dates = uniq(annOf);
         const minN = g.view.filter(hasMin).length;
@@ -539,21 +538,34 @@ function render(keepFocus){
             <span class="tcat">${esc(a.cat)}</span>
             ${a.tname ? `<span class="e-type">${esc(a.tname)}</span>` : ""}
             ${a.ann1 ? `<span class="dtchip dt-ann1">1차 ${esc(a.ann1)}</span>` : ""}
-            ${hasMin(a) ? `<span class="dtchip dt-min">최저</span>` : ""}
+            ${hasMin(a) ? `<span class="dtchip dt-min" title="${esc(a.minTxt || "수능최저 있음")}">최저${a.minTxt ? " " + esc(a.minTxt) : ""}</span>` : ""}
             ${a.iv ? `<span class="dtchip dt-iv">면접 ${esc(a.iv)}</span>` : ""}
             ${annOf(a) ? `<span class="dtchip dt-ann">발표 ${esc(annOf(a))}</span>` : ""}
             <span class="e-right">${badge(a)}</span>
           </div>`).join("")}
         </div></div>`; }).join("")
       : `<div class="empty" style="background:#fff;border:2.5px solid var(--navy2)">표시할 지원 내역이 없습니다.</div>`);
+    };
+    const wireEntries = () => m.querySelectorAll(".entry").forEach(el => el.onclick = () => openModal(el.dataset.c, +el.dataset.n, +el.dataset.i));
+    m.innerHTML = statHtml(k) + annAlertHtml() + `
+      <div class="filters">
+        <select id="ff-sort">
+          <option value="cnt" ${uSort==="cnt"?"selected":""}>지원 많은 순</option>
+          <option value="pass" ${uSort==="pass"?"selected":""}>합격 많은 순</option>
+          <option value="iv" ${uSort==="iv"?"selected":""}>면접 빠른 순</option>
+          <option value="name" ${uSort==="name"?"selected":""}>대학명 가나다순</option>
+        </select>
+        <select id="ff-res"><option value="">결과 전체</option>${FILTERS.map(r=>`<option ${fRes===r?"selected":""}>${r}</option>`).join("")}</select>
+        <select id="ff-cat"><option value="">전형 전체</option>${["학생부교과","학생부종합","논술","실기/특기","정시(가)","정시(나)","정시(다)","기타"].map(c=>`<option ${fCat===c?"selected":""}>${c}</option>`).join("")}</select>
+        <input id="ff-q" placeholder="이름·대학·학과 검색" value="${esc(fQ)}">
+      </div>
+      <div id="res-univ">` + groupsHtml() + `</div>`;
     $("ff-sort").onchange = e => { uSort = e.target.value; render(); };
     $("ff-res").onchange = e => { fRes = e.target.value; render(); };
     $("ff-cat").onchange = e => { fCat = e.target.value; render(); };
-    const uq = $("ff-q");
-    uq.oninput = e => { fQ = e.target.value; render(true); };
-    if (keepFocus) { uq.focus(); uq.setSelectionRange(uq.value.length, uq.value.length); }
+    $("ff-q").oninput = e => { fQ = e.target.value; $("res-univ").innerHTML = groupsHtml(); wireEntries(); };
     wireAnnBox();
-    m.querySelectorAll(".entry").forEach(el => el.onclick = () => openModal(el.dataset.c, +el.dataset.n, +el.dataset.i));
+    wireEntries();
   } else {
     const c = TAB, k = counts(allEntries(c));
     m.innerHTML = statHtml(k) +
@@ -578,7 +590,7 @@ function render(keepFocus){
               <span class="tcat">${esc(a.cat)}</span>
               ${a.tname ? `<span class="e-type">${esc(a.tname)}</span>` : ""}
               ${a.ann1 ? `<span class="dtchip dt-ann1">1차 ${esc(a.ann1)}</span>` : ""}
-            ${hasMin(a) ? `<span class="dtchip dt-min">최저</span>` : ""}
+            ${hasMin(a) ? `<span class="dtchip dt-min" title="${esc(a.minTxt || "수능최저 있음")}">최저${a.minTxt ? " " + esc(a.minTxt) : ""}</span>` : ""}
             ${a.iv ? `<span class="dtchip dt-iv">면접 ${esc(a.iv)}</span>` : ""}
             ${annOf(a) ? `<span class="dtchip dt-ann">발표 ${esc(annOf(a))}</span>` : ""}
               <span class="e-right">${badge(a)}</span>
@@ -604,6 +616,7 @@ function openModal(c, n, idx){
   $("f-fail").value = a.failReason || ""; $("f-iv").value = a.iv || "";
   $("f-ann").value = a.ann || ""; $("f-memo").value = a.memo || "";
   $("f-ann1").value = a.ann1 || ""; $("f-min").checked = hasMin(a);
+  $("f-mintxt").value = a.minTxt || "";
   $("mdel").style.display = idx === null ? "none" : "block";
   $("modal").classList.add("show");
   if (idx === null) $("f-univ").focus();
@@ -626,7 +639,8 @@ $("msave").onclick = async () => {
     rsv: $("f-rsv").value.trim(), reg: $("f-reg").value,
     failReason: $("f-fail").value, iv: $("f-iv").value.trim(),
     ann: $("f-ann").value.trim(), memo: $("f-memo").value.trim(),
-    ann1: $("f-ann1").value.trim(), min: $("f-min").checked ? "Y" : ""
+    ann1: $("f-ann1").value.trim(), minTxt: $("f-mintxt").value.trim(),
+    min: ($("f-min").checked || $("f-mintxt").value.trim()) ? "Y" : ""
   };
   if (!a.univ || !a.major) { alert("대학명과 모집단위를 입력해 주세요."); return; }
   const apps = [...getApps(c, n)];
@@ -740,7 +754,7 @@ function parseSheet(ws, fname){
     const row = {tu:String(r[col.tu]||""), si:String(r[col.si]||""), tname:String(r[col.tname]||"")};
     apps.push({univ, major, cat:toCat(row), tname:cleanTname(row.tname),
       stage1:"", fin:"", rsv:"", reg:"", failReason:"",
-      min: String(r[col.min]||"").trim().toUpperCase() === "Y" ? "Y" : "",
+      min: String(r[col.min]||"").trim().toUpperCase() === "Y" ? "Y" : "", minTxt:"",
       iv:shortDate(r[col.interview]), ann:shortDate(r[col.announce]), ann1:shortDate(r[col.ann1]), memo:""});
   }
   const rosterName = ROSTER[c].s.find(s => s[0] === n)[1];
@@ -769,13 +783,16 @@ function parseMulti(rows, hIdx, col, fname){
     if (/차$/.test(si)) memoParts.push(si);   // 전문대 수시1차·2차 구분
     const bigo = cleanVal(r[col.memo]);
     if (bigo) memoParts.push(bigo);
+    // 최저학력기준 원문 보존: "* 수능최저기준:" 접두어·따옴표만 걷어내고 그대로
+    const minRaw = String(r[col.min] || "").replace(/["“”]/g, "")
+      .replace(/^\s*\*?\s*수능최저기준\s*[:：]?\s*/, "").replace(/\s+/g, " ").trim();
     map[key].apps.push({
       univ, major,
       cat: toCat({tu:String(r[col.tu]||""), si, tname:String(r[col.tname]||"")}),
       tname: cleanTname(String(r[col.tname]||"")),
       stage1: mapStage1(r[col.st1]), fin: mapFin(r[col.finRes]),
       rsv: cleanVal(r[col.rsv]), reg: mapReg(r[col.reg]), failReason: mapFail(r[col.failr]),
-      min: /수능최저/.test(String(r[col.min] || "")) ? "Y" : "",
+      min: minRaw ? "Y" : "", minTxt: minRaw,
       iv: shortDate(r[col.interview]), ann: shortDate(r[col.announce]), ann1: shortDate(r[col.ann1]),
       memo: memoParts.join(" · ")
     });
@@ -809,7 +826,7 @@ fileInput.onchange = async () => {
     importPlan.map(p => `<div class="ifile">
       <div class="fh">${p.c}반 ${String(p.n).padStart(2,"0")}번 ${esc(p.rosterName)} — ${p.apps.length}건
         ${p.warn ? `<span class="warn">⚠ 파일의 이름(${esc(p.nameInFile)})이 명단과 다릅니다</span>` : ""}</div>
-      ${p.apps.map(a => { const ex = [a.ann1?"1차 "+a.ann1:"", hasMin(a)?"최저 有":"", a.iv?"면접 "+a.iv:"", a.ann?"발표 "+a.ann:"", a.memo||""].filter(Boolean).join(" · ");
+      ${p.apps.map(a => { const ex = [a.ann1?"1차 "+a.ann1:"", hasMin(a)?"최저 "+(a.minTxt||"有"):"", a.iv?"면접 "+a.iv:"", a.ann?"발표 "+a.ann:"", a.memo||""].filter(Boolean).join(" · ");
         return `<div class="frow-i"><b>${esc(a.univ)}</b> ${esc(a.major)} · ${esc(a.cat)}${a.tname ? " · " + esc(a.tname) : ""}${ex ? ` <span style="color:#8a94a3">(${esc(ex)})</span>` : ""}</div>`; }).join("")}
     </div>`).join("");
   $("imodal").classList.add("show");
@@ -825,7 +842,11 @@ $("isave").onclick = async () => {
       let apps = replace ? [] : [...getApps(p.c, p.n)];
       const dkey = x => uKey(x.univ) + "|" + String(x.major).replace(/\s/g, "") + "|" + String(x.tname || "").replace(/\s/g, "");
       for (const a of p.apps) {
-        if (!apps.some(x => dkey(x) === dkey(a))) apps.push(a);
+        const hit = apps.find(x => dkey(x) === dkey(a));
+        if (!hit) { apps.push(a); continue; }
+        // 이미 있는 내역이면 비어 있는 항목(일정·최저·결과)만 파일 값으로 채움
+        for (const f of ["iv","ann","ann1","min","minTxt","stage1","fin","rsv","reg","failReason"])
+          if (!hit[f] && a[f]) hit[f] = a[f];
       }
       await saveDoc(p.c, p.n, apps);
     }
@@ -837,7 +858,7 @@ $("isave").onclick = async () => {
 /* ── CSV ── */
 function downloadCsv(){
   const rows = [["반","번호","이름","대학","모집단위","전형구분","전형명","1단계","최종결과","불합격사유","최초후보순위","등록여부","비고","면접일자","발표일자","1단계발표","수능최저"]];
-  allEntries("all").forEach(a => rows.push([a.c, a.n, a.nm, a.univ, a.major, a.cat, a.tname||"", a.stage1||"", a.fin||"", a.failReason||"", a.rsv||"", a.reg||"", a.memo||"", a.iv||"", annOf(a), a.ann1||"", hasMin(a)?"Y":""]));
+  allEntries("all").forEach(a => rows.push([a.c, a.n, a.nm, a.univ, a.major, a.cat, a.tname||"", a.stage1||"", a.fin||"", a.failReason||"", a.rsv||"", a.reg||"", a.memo||"", a.iv||"", annOf(a), a.ann1||"", hasMin(a) ? (a.minTxt || "Y") : ""]));
   const csv = "﻿" + rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\r\n");
   const url = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
   const aEl = document.createElement("a");
