@@ -79,6 +79,13 @@ tr.rowbtn:hover td{background:#f8f5ec}
 .b-final{background:var(--green);color:#fff;border-color:#127a30;margin-left:4px}
 .tcat{display:inline-block;padding:1px 8px;background:#fff;color:var(--navy);font-size:12px;font-weight:800;border:2px solid var(--navy);white-space:nowrap}
 
+/* ── 일정 칩 (1차 발표·최저·면접·최종 발표) ── */
+.dtchip{display:inline-block;font-size:12px;font-weight:800;padding:1px 7px;border:1.5px solid;white-space:nowrap}
+.dt-ann1{color:var(--navy);border-color:#9fb4d6;background:#f0f5fc}
+.dt-min{color:var(--red);border-color:#e0a9a2;background:#fdf0ee}
+.dt-iv{color:#127a30;border-color:#9fd0ab;background:#eef8f0}
+.dt-ann{color:var(--gold-d);border-color:#e2c86e;background:#fdf7e2}
+
 /* ── 반별 학생 카드 ── */
 .scard{background:#fff;border:2.5px solid var(--navy2);margin-bottom:12px;overflow:hidden;box-shadow:3px 3px 0 rgba(9,47,102,.9)}
 .shead{display:flex;align-items:center;gap:10px;padding:11px 14px;background:#faf7f0;border-bottom:2px solid #e8e4d8}
@@ -224,10 +231,12 @@ footer b{color:var(--navy)}
         <select id="f-reg"><option value="">미정</option><option value="Y">Y (등록)</option><option value="N">N (미등록)</option></select>
       </div>
     </div>
-    <div class="frow2">
+    <div class="frow2" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="frow"><label>1단계 발표</label><input id="f-ann1" placeholder="예: 11.14"></div>
       <div class="frow"><label>면접일자</label><input id="f-iv" placeholder="예: 11.21"></div>
-      <div class="frow"><label>발표일자</label><input id="f-ann" placeholder="예: 12.5"></div>
+      <div class="frow"><label>최종 발표</label><input id="f-ann" placeholder="예: 12.5"></div>
     </div>
+    <label class="chk" style="color:var(--red);margin:2px 0 10px"><input type="checkbox" id="f-min" style="accent-color:var(--red)"> 수능최저 있음</label>
     <div class="frow"><label>불합격사유</label>
       <select id="f-fail"><option value="">해당없음</option><option>미응시</option><option>최저미달</option><option>불합격</option></select>
     </div>
@@ -311,8 +320,10 @@ function norm(a){
     stage1: r === "1단계 합격" ? "합격" : "",
     fin: r === "최초합격" ? "합격" : (r === "추가합격" || r === "불합격") ? r : "",
     rsv: r === "충원대기" ? (a.wait || "") : "",
-    failReason: "", reg: a.final ? "Y" : "", iv: "", ann: ""};
+    failReason: "", reg: a.final ? "Y" : "", iv: "", ann: "", ann1: "", min: ""};
 }
+// 수능최저: 전용 필드 우선, 구버전은 비고의 "수능최저" 문구로 판정
+const hasMin = a => a.min === "Y" || /수능최저/.test(a.memo || "");
 // 발표일: 전용 필드 우선, 없으면 엑셀 불러오기 구버전이 비고에 남긴 "발표 ○.○"에서 추출
 function annOf(a){
   if (a.ann) return a.ann;
@@ -466,7 +477,7 @@ function render(keepFocus){
             <td>${a.c}</td><td>${a.n}</td><td style="font-weight:700">${esc(a.nm)}</td>
             <td style="font-weight:700">${esc(a.univ)}</td><td>${esc(a.major)}</td>
             <td><span class="tcat">${esc(a.cat)}</span></td><td>${esc(a.tname||"")}</td>
-            <td>${badge(a)}</td><td style="font-size:13px;color:var(--soft)">${esc([a.iv?"면접 "+a.iv:"",a.ann?"발표 "+a.ann:"",a.memo||""].filter(Boolean).join(" · "))}</td>
+            <td>${badge(a)}</td><td style="font-size:13px;color:var(--soft)">${esc([a.ann1?"1차 "+a.ann1:"",hasMin(a)?"최저":"",a.iv?"면접 "+a.iv:"",a.ann?"발표 "+a.ann:"",a.memo||""].filter(Boolean).join(" · "))}</td>
           </tr>`).join("") : `<tr><td colspan="9" class="empty">표시할 지원 내역이 없습니다. 반 탭에서 학생별로 추가하세요.</td></tr>`}
         </tbody></table></div>`;
     $("ff-res").onchange = e => { fRes = e.target.value; render(); };
@@ -488,15 +499,19 @@ function render(keepFocus){
         (!q || (a.univ + a.major + a.nm + (a.tname || "")).toLowerCase().includes(q)))}))
       .filter(g => g.view.length)
       .map(g => ({...g, k: counts(g.view)}));
+    const ivKeyOf = a => a.iv ? annKey(a.iv) : 9999;
     groups.sort(
       uSort === "name" ? (a, b) => a.name.localeCompare(b.name, "ko") :
       uSort === "pass" ? (a, b) => (b.k.first + b.k.add) - (a.k.first + a.k.add) || b.view.length - a.view.length :
+      uSort === "iv" ? (a, b) => Math.min(...a.view.map(ivKeyOf)) - Math.min(...b.view.map(ivKeyOf)) || a.name.localeCompare(b.name, "ko") :
       (a, b) => b.view.length - a.view.length || a.name.localeCompare(b.name, "ko"));
+    if (uSort === "iv") groups.forEach(g => g.view.sort((a, b) => ivKeyOf(a) - ivKeyOf(b)));
     m.innerHTML = statHtml(k) + annAlertHtml() + `
       <div class="filters">
         <select id="ff-sort">
           <option value="cnt" ${uSort==="cnt"?"selected":""}>지원 많은 순</option>
           <option value="pass" ${uSort==="pass"?"selected":""}>합격 많은 순</option>
+          <option value="iv" ${uSort==="iv"?"selected":""}>면접 빠른 순</option>
           <option value="name" ${uSort==="name"?"selected":""}>대학명 가나다순</option>
         </select>
         <select id="ff-res"><option value="">결과 전체</option>${FILTERS.map(r=>`<option ${fRes===r?"selected":""}>${r}</option>`).join("")}</select>
@@ -504,12 +519,17 @@ function render(keepFocus){
         <input id="ff-q" placeholder="이름·대학·학과 검색" value="${esc(fQ)}">
       </div>` +
       (groups.length ? groups.map(g => {
-        const dates = [...new Set(g.view.map(annOf).filter(Boolean))].sort((a, b) => annKey(a) - annKey(b));
+        const uniq = f => [...new Set(g.view.map(f).filter(Boolean))].sort((a, b) => annKey(a) - annKey(b));
+        const d1 = uniq(a => a.ann1 || ""), dIv = uniq(a => a.iv || ""), dates = uniq(annOf);
+        const minN = g.view.filter(hasMin).length;
         return `<div class="scard">
         <div class="shead">
           <div class="snum" style="min-width:auto;padding:6px 10px">${g.view.length}건</div>
           <div class="sname">${esc(g.name)}</div>
-          ${dates.length ? `<span class="badge b-rsv" style="border-style:solid">발표 ${esc(dates.join(" · "))}</span>` : ""}
+          ${d1.length ? `<span class="dtchip dt-ann1">1차 ${esc(d1.join(" · "))}</span>` : ""}
+          ${minN ? `<span class="dtchip dt-min">최저 ${minN}건</span>` : ""}
+          ${dIv.length ? `<span class="dtchip dt-iv">면접 ${esc(dIv.join(" · "))}</span>` : ""}
+          ${dates.length ? `<span class="dtchip dt-ann">발표 ${esc(dates.join(" · "))}</span>` : ""}
           <div class="ssum"><b style="color:var(--green)">합 ${g.k.first}</b> · <span style="color:var(--gold-d)">추합 ${g.k.add}</span> · <span style="color:var(--red)">불 ${g.k.fail}</span> · 대기 ${g.k.wait}</div>
         </div>
         <div class="entries">${g.view.map(a => `
@@ -518,7 +538,10 @@ function render(keepFocus){
             <span class="e-major">${esc(a.major)}</span>
             <span class="tcat">${esc(a.cat)}</span>
             ${a.tname ? `<span class="e-type">${esc(a.tname)}</span>` : ""}
-            ${annOf(a) ? `<span class="e-type" style="color:var(--gold-d);font-weight:700">발표 ${esc(annOf(a))}</span>` : ""}
+            ${a.ann1 ? `<span class="dtchip dt-ann1">1차 ${esc(a.ann1)}</span>` : ""}
+            ${hasMin(a) ? `<span class="dtchip dt-min">최저</span>` : ""}
+            ${a.iv ? `<span class="dtchip dt-iv">면접 ${esc(a.iv)}</span>` : ""}
+            ${annOf(a) ? `<span class="dtchip dt-ann">발표 ${esc(annOf(a))}</span>` : ""}
             <span class="e-right">${badge(a)}</span>
           </div>`).join("")}
         </div></div>`; }).join("")
@@ -554,7 +577,10 @@ function render(keepFocus){
               <span class="e-major">${esc(a.major)}</span>
               <span class="tcat">${esc(a.cat)}</span>
               ${a.tname ? `<span class="e-type">${esc(a.tname)}</span>` : ""}
-              ${annOf(a) ? `<span class="e-type" style="color:var(--gold-d);font-weight:700">발표 ${esc(annOf(a))}</span>` : ""}
+              ${a.ann1 ? `<span class="dtchip dt-ann1">1차 ${esc(a.ann1)}</span>` : ""}
+            ${hasMin(a) ? `<span class="dtchip dt-min">최저</span>` : ""}
+            ${a.iv ? `<span class="dtchip dt-iv">면접 ${esc(a.iv)}</span>` : ""}
+            ${annOf(a) ? `<span class="dtchip dt-ann">발표 ${esc(annOf(a))}</span>` : ""}
               <span class="e-right">${badge(a)}</span>
             </div>`).join("") : `<div class="noentry">아직 입력된 지원 내역이 없습니다.</div>`}
           </div></div>`;
@@ -577,6 +603,7 @@ function openModal(c, n, idx){
   $("f-rsv").value = a.rsv || ""; $("f-reg").value = a.reg || "";
   $("f-fail").value = a.failReason || ""; $("f-iv").value = a.iv || "";
   $("f-ann").value = a.ann || ""; $("f-memo").value = a.memo || "";
+  $("f-ann1").value = a.ann1 || ""; $("f-min").checked = hasMin(a);
   $("mdel").style.display = idx === null ? "none" : "block";
   $("modal").classList.add("show");
   if (idx === null) $("f-univ").focus();
@@ -598,7 +625,8 @@ $("msave").onclick = async () => {
     stage1: $("f-stage1").value, fin: $("f-fin").value,
     rsv: $("f-rsv").value.trim(), reg: $("f-reg").value,
     failReason: $("f-fail").value, iv: $("f-iv").value.trim(),
-    ann: $("f-ann").value.trim(), memo: $("f-memo").value.trim()
+    ann: $("f-ann").value.trim(), memo: $("f-memo").value.trim(),
+    ann1: $("f-ann1").value.trim(), min: $("f-min").checked ? "Y" : ""
   };
   if (!a.univ || !a.major) { alert("대학명과 모집단위를 입력해 주세요."); return; }
   const apps = [...getApps(c, n)];
@@ -677,6 +705,7 @@ function parseSheet(ws, fname){
         else if (h.startsWith("수능최저") || h === "최저학력기준") col.min = j;
         else if (h.startsWith("면접일자")) col.interview = j;
         else if (h.startsWith("최종발표")) col.announce = j;
+        else if (h.startsWith("1단계발표")) col.ann1 = j;
         else if (h === "반") col.cls = j;
         else if (h === "번호") col.num = j;
         else if (h === "이름") col.name = j;
@@ -709,11 +738,10 @@ function parseSheet(ws, fname){
     const major = String(r[col.major] || "").trim();
     if (!univ || !major) continue;
     const row = {tu:String(r[col.tu]||""), si:String(r[col.si]||""), tname:String(r[col.tname]||"")};
-    const memoParts = [];
-    if (String(r[col.min]||"").trim().toUpperCase() === "Y") memoParts.push("수능최저 有");
     apps.push({univ, major, cat:toCat(row), tname:cleanTname(row.tname),
       stage1:"", fin:"", rsv:"", reg:"", failReason:"",
-      iv:shortDate(r[col.interview]), ann:shortDate(r[col.announce]), memo:memoParts.join(" · ")});
+      min: String(r[col.min]||"").trim().toUpperCase() === "Y" ? "Y" : "",
+      iv:shortDate(r[col.interview]), ann:shortDate(r[col.announce]), ann1:shortDate(r[col.ann1]), memo:""});
   }
   const rosterName = ROSTER[c].s.find(s => s[0] === n)[1];
   return {plans:[{c, n, nameInFile, rosterName, warn:nameInFile !== rosterName, apps}]};
@@ -738,7 +766,6 @@ function parseMulti(rows, hIdx, col, fname){
     }
     const si = String(r[col.si] || "").trim();
     const memoParts = [];
-    if (/수능최저/.test(String(r[col.min] || ""))) memoParts.push("수능최저 有");
     if (/차$/.test(si)) memoParts.push(si);   // 전문대 수시1차·2차 구분
     const bigo = cleanVal(r[col.memo]);
     if (bigo) memoParts.push(bigo);
@@ -748,7 +775,8 @@ function parseMulti(rows, hIdx, col, fname){
       tname: cleanTname(String(r[col.tname]||"")),
       stage1: mapStage1(r[col.st1]), fin: mapFin(r[col.finRes]),
       rsv: cleanVal(r[col.rsv]), reg: mapReg(r[col.reg]), failReason: mapFail(r[col.failr]),
-      iv: shortDate(r[col.interview]), ann: shortDate(r[col.announce]),
+      min: /수능최저/.test(String(r[col.min] || "")) ? "Y" : "",
+      iv: shortDate(r[col.interview]), ann: shortDate(r[col.announce]), ann1: shortDate(r[col.ann1]),
       memo: memoParts.join(" · ")
     });
   }
@@ -781,7 +809,7 @@ fileInput.onchange = async () => {
     importPlan.map(p => `<div class="ifile">
       <div class="fh">${p.c}반 ${String(p.n).padStart(2,"0")}번 ${esc(p.rosterName)} — ${p.apps.length}건
         ${p.warn ? `<span class="warn">⚠ 파일의 이름(${esc(p.nameInFile)})이 명단과 다릅니다</span>` : ""}</div>
-      ${p.apps.map(a => { const ex = [a.iv?"면접 "+a.iv:"", a.ann?"발표 "+a.ann:"", a.memo||""].filter(Boolean).join(" · ");
+      ${p.apps.map(a => { const ex = [a.ann1?"1차 "+a.ann1:"", hasMin(a)?"최저 有":"", a.iv?"면접 "+a.iv:"", a.ann?"발표 "+a.ann:"", a.memo||""].filter(Boolean).join(" · ");
         return `<div class="frow-i"><b>${esc(a.univ)}</b> ${esc(a.major)} · ${esc(a.cat)}${a.tname ? " · " + esc(a.tname) : ""}${ex ? ` <span style="color:#8a94a3">(${esc(ex)})</span>` : ""}</div>`; }).join("")}
     </div>`).join("");
   $("imodal").classList.add("show");
@@ -808,8 +836,8 @@ $("isave").onclick = async () => {
 
 /* ── CSV ── */
 function downloadCsv(){
-  const rows = [["반","번호","이름","대학","모집단위","전형구분","전형명","1단계","최종결과","불합격사유","최초후보순위","등록여부","비고","면접일자","발표일자"]];
-  allEntries("all").forEach(a => rows.push([a.c, a.n, a.nm, a.univ, a.major, a.cat, a.tname||"", a.stage1||"", a.fin||"", a.failReason||"", a.rsv||"", a.reg||"", a.memo||"", a.iv||"", annOf(a)]));
+  const rows = [["반","번호","이름","대학","모집단위","전형구분","전형명","1단계","최종결과","불합격사유","최초후보순위","등록여부","비고","면접일자","발표일자","1단계발표","수능최저"]];
+  allEntries("all").forEach(a => rows.push([a.c, a.n, a.nm, a.univ, a.major, a.cat, a.tname||"", a.stage1||"", a.fin||"", a.failReason||"", a.rsv||"", a.reg||"", a.memo||"", a.iv||"", annOf(a), a.ann1||"", hasMin(a)?"Y":""]));
   const csv = "﻿" + rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\r\n");
   const url = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
   const aEl = document.createElement("a");
