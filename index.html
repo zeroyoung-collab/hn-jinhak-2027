@@ -512,7 +512,9 @@ function render(){
       .map(g => ({...g, view: g.items.filter(a =>
         (!fRes || stateOf(a) === fRes) &&
         (!fCat || a.cat === fCat) &&
-        (!q || (a.univ + a.major + a.nm + (a.tname || "")).toLowerCase().includes(q)))}))
+        (!q || (a.univ + a.major + a.nm + (a.tname || "")).toLowerCase().includes(q)) &&
+        // 면접·발표·최저 정렬 시 해당 정보 없는 건은 숨김
+        (uSort === "iv" ? !!a.iv : uSort === "ann" ? !!annOf(a) : uSort === "min" ? hasMin(a) : true))}))
       .filter(g => g.view.length)
       .map(g => ({...g, k: counts(g.view)}));
     const ivKeyOf = a => a.iv ? annKey(a.iv) : 9999;
