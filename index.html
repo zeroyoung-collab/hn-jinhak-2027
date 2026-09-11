@@ -604,6 +604,7 @@ function render(){
       `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
         <div style="font-size:13px;color:var(--soft);flex:1">담임 ${ROSTER[c].t} 선생님 · 학생 ${ROSTER[c].s.length}명 — 지원 내역을 누르면 결과를 수정할 수 있습니다.</div>
         <button class="csvbtn" id="xlsin">📥 엑셀 불러오기</button>
+        <button class="csvbtn" id="clsdel" style="color:var(--red);border-color:#d98a8a">🗑 ${c}반 전체 삭제</button>
       </div>` +
       ROSTER[c].s.map(([n, nm]) => {
         const apps = getApps(c, n);
@@ -630,6 +631,17 @@ function render(){
           </div></div>`;
       }).join("");
     $("xlsin").onclick = () => $("xlsfile").click();
+    $("clsdel").onclick = async () => {
+      const tot = allEntries(c).length;
+      if (!tot) { alert("삭제할 지원 내역이 없습니다."); return; }
+      if (!confirm(`${c}반 학생 전원의 지원 내역 ${tot}건을 모두 삭제합니다.\n모든 선생님 화면에서 함께 삭제되며 되돌릴 수 없습니다.\n(삭제 전 ${c}반 백업 CSV가 자동 다운로드됩니다)`)) return;
+      if (prompt(`정말 삭제하려면 숫자 ${c} 을(를) 입력하세요.`) !== c) { alert("입력이 달라 취소했습니다."); return; }
+      downloadCsv(c);   // 삭제 직전 백업
+      try {
+        for (const [n] of ROSTER[c].s) if (getApps(c, n).length) await saveDoc(c, n, []);
+        alert(`${c}반 지원 내역 ${tot}건을 삭제했습니다.`);
+      } catch (e) { alert("삭제 실패: " + e.message); }
+    };
     m.querySelectorAll(".addbtn").forEach(b => b.onclick = () => openModal(b.dataset.c, +b.dataset.n, null));
     m.querySelectorAll(".entry").forEach(el => el.onclick = () => openModal(el.dataset.c, +el.dataset.n, +el.dataset.i));
   }
@@ -888,13 +900,14 @@ $("isave").onclick = async () => {
 };
 
 /* ── CSV ── */
-function downloadCsv(){
+function downloadCsv(cls){
+  cls = typeof cls === "string" && ROSTER[cls] ? cls : "all";
   const rows = [["반","번호","이름","대학","모집단위","전형구분","전형명","1단계","최종결과","불합격사유","최초후보순위","등록여부","비고","면접일자","발표일자","1단계발표","수능최저"]];
-  allEntries("all").forEach(a => rows.push([a.c, a.n, a.nm, a.univ, a.major, a.cat, a.tname||"", a.stage1||"", a.fin||"", a.failReason||"", a.rsv||"", a.reg||"", a.memo||"", a.iv||"", annOf(a), a.ann1||"", hasMin(a) ? (a.minTxt || "Y") : ""]));
+  allEntries(cls).forEach(a => rows.push([a.c, a.n, a.nm, a.univ, a.major, a.cat, a.tname||"", a.stage1||"", a.fin||"", a.failReason||"", a.rsv||"", a.reg||"", a.memo||"", a.iv||"", annOf(a), a.ann1||"", hasMin(a) ? (a.minTxt || "Y") : ""]));
   const csv = "﻿" + rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\r\n");
   const url = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
   const aEl = document.createElement("a");
-  aEl.href = url; aEl.download = "2026학년도_대입지원현황.csv"; aEl.click();
+  aEl.href = url; aEl.download = cls === "all" ? "2026학년도_대입지원현황.csv" : `2026학년도_${cls}반_지원현황_백업.csv`; aEl.click();
   URL.revokeObjectURL(url);
 }
 
