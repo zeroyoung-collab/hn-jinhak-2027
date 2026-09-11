@@ -360,8 +360,8 @@ function stateOf(a){
   if (a.stage1 === "합격") return "1단계 합격";
   return "발표 전";
 }
-// 대학별 묶기: 공백 제거 + "○○대학교"="○○대" 통일, 표시명은 가장 많이 쓰인 표기
-const uKey = u => String(u || "").replace(/\s/g, "").replace(/대학교$/, "대");
+// 대학별 묶기: 공백·캠퍼스 표기 제거 + "○○대학교"="○○대" 통일, 표시명은 가장 많이 쓰인 표기
+const uKey = u => String(u || "").replace(/\s/g, "").replace(/\(.*?\)/g, "").replace(/-.+$/, "").replace(/대학교$/, "대");
 function groupByUniv(list){
   const g = {};
   for (const a of list) {
@@ -456,7 +456,7 @@ function render(keepFocus){
         <input id="ff-q" placeholder="이름·대학·학과 검색" value="${esc(fQ)}">
       </div>
       <div class="toolrow">
-        <button class="csvbtn" id="xlsin">📥 엑셀 불러오기 (관심대학 리스트)</button>
+        <button class="csvbtn" id="xlsin">📥 엑셀 불러오기 (관심대학·수시진학관리)</button>
         <button class="csvbtn" id="csv">⬇ 엑셀(CSV) 다운로드</button>
       </div>
       <div class="tblwrap"><table>
@@ -639,9 +639,20 @@ function toCat(row){
 }
 function cleanTname(t){
   t = (t || "").trim();
-  const m = t.match(/^[^(]*\((.*)\)$/);   // "학생부교과(일반전형)" → "일반전형"
-  return m ? m[1] : t;
+  const m = t.match(/^([^(]*)\((.*)\)$/); // "학생부교과(일반전형)" → "일반전형" (전형유형 접두어일 때만 해체)
+  if (m && /^(학생부|논술|실기|면접|교과|종합)/.test(m[1])) return m[2].replace(/\)\s*\(/g, "·");
+  // "학생부종합(창의융합인재) 면접형" → "창의융합인재 면접형", "학생부종합:학업우수전형" → "학업우수전형"
+  t = t.replace(/^(학생부교과|학생부종합|논술위주|실기위주|면접위주|학생부위주)/, "").replace(/^[\s:：]+/, "");
+  const b = t.match(/^\[(.*)\]$/);        // "[일반학생전형]" → "일반학생전형"
+  if (b) return b[1];
+  return t.replace(/^\(([^)]*)\)\s*/, "$1 ").trim();
 }
+// 결과 열 값 정리 (수시진학관리 일괄 파일용)
+const cleanVal = v => { v = String(v ?? "").trim(); return v === "-" || v === "'-" ? "" : v; };
+const mapStage1 = v => { v = cleanVal(v); return !v ? "" : /불합/.test(v) ? "불합격" : /합격/.test(v) ? "합격" : ""; };
+const mapFin = v => { v = cleanVal(v); if (!v) return ""; if (/추가|충원합/.test(v)) return "추가합격"; if (/불합/.test(v)) return "불합격"; if (/합격/.test(v)) return "합격"; return ""; };
+const mapReg = v => { v = cleanVal(v).toUpperCase(); if (/미등록|^N/.test(v)) return "N"; if (/등록|^Y/.test(v)) return "Y"; return ""; };
+const mapFail = v => { v = cleanVal(v); if (!v) return ""; if (/미응시/.test(v)) return "미응시"; if (/최저/.test(v)) return "최저미달"; return "불합격"; };
 function shortDate(s){
   // "2026-11-21 ~ 2026-11-22" → "11.21~11.22"
   const d = [...String(s || "").matchAll(/\d{4}-(\d{2})-(\d{2})/g)].map(m => `${+m[1]}.${+m[2]}`);
@@ -651,31 +662,44 @@ function shortDate(s){
 
 function parseSheet(ws, fname){
   const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, defval:""});
+  let hIdx = -1, col = {}, multi = false;
+  for (let i = 0; i < Math.min(rows.length, 12); i++) {
+    const cells = rows[i].map(v => String(v).replace(/\s/g, ""));
+    if (cells.includes("대학명") && cells.includes("모집단위")) {
+      hIdx = i;
+      multi = cells.includes("반") && cells.includes("번호") && cells.includes("이름");
+      cells.forEach((h, j) => {
+        if (h === "대학명") col.univ = j;
+        else if (h === "모집단위") col.major = j;
+        else if (h === "전형유형") col.tu = j;
+        else if (h === "세부유형") col.tname = j;
+        else if (h === "시기" || h === "모집시기") col.si = j;
+        else if (h.startsWith("수능최저") || h === "최저학력기준") col.min = j;
+        else if (h.startsWith("면접일자")) col.interview = j;
+        else if (h.startsWith("최종발표")) col.announce = j;
+        else if (h === "반") col.cls = j;
+        else if (h === "번호") col.num = j;
+        else if (h === "이름") col.name = j;
+        else if (h === "1단계") col.st1 = j;
+        else if (h === "최종단계") col.finRes = j;
+        else if (h === "불합격사유") col.failr = j;
+        else if (h === "최초후보순위") col.rsv = j;
+        else if (h === "등록여부") col.reg = j;
+        else if (h === "비고") col.memo = j;
+      });
+      break;
+    }
+  }
+  if (hIdx < 0) return {error:`${fname}: 헤더(대학명·모집단위)를 찾지 못했습니다.`};
+  if (multi) return parseMulti(rows, hIdx, col, fname);
+
+  // ── 관심대학 리스트 (학생 1명 단위) ──
   let c = null, n = null, nameInFile = "";
   for (let i = 0; i < Math.min(rows.length, 8); i++) {
     const line = rows[i].join(" ");
     const m = line.match(/3\s*학년\s*(\d+)\s*반\s*(\d+)\s*번\s*([가-힣]+)/);
     if (m) { c = m[1]; n = +m[2]; nameInFile = m[3]; break; }
   }
-  let hIdx = -1, col = {};
-  for (let i = 0; i < Math.min(rows.length, 12); i++) {
-    const cells = rows[i].map(v => String(v).replace(/\s/g, ""));
-    if (cells.includes("대학명") && cells.includes("모집단위")) {
-      hIdx = i;
-      cells.forEach((h, j) => {
-        if (h === "대학명") col.univ = j;
-        else if (h === "모집단위") col.major = j;
-        else if (h === "전형유형") col.tu = j;
-        else if (h === "세부유형") col.tname = j;
-        else if (h === "시기") col.si = j;
-        else if (h.startsWith("수능최저")) col.min = j;
-        else if (h.startsWith("면접일자")) col.interview = j;
-        else if (h.startsWith("최종발표")) col.announce = j;
-      });
-      break;
-    }
-  }
-  if (hIdx < 0) return {error:`${fname}: 헤더(대학명·모집단위)를 찾지 못했습니다.`};
   if (!c || !ROSTER[c] || !ROSTER[c].s.find(s => s[0] === n))
     return {error:`${fname}: "3학년 ○반 ○번 이름" 정보를 찾지 못했거나 명단에 없습니다.`};
   const apps = [];
@@ -692,7 +716,45 @@ function parseSheet(ws, fname){
       iv:shortDate(r[col.interview]), ann:shortDate(r[col.announce]), memo:memoParts.join(" · ")});
   }
   const rosterName = ROSTER[c].s.find(s => s[0] === n)[1];
-  return {c, n, nameInFile, rosterName, warn:nameInFile !== rosterName, apps};
+  return {plans:[{c, n, nameInFile, rosterName, warn:nameInFile !== rosterName, apps}]};
+}
+
+// ── 수시진학관리 일괄 파일 (반·번호·이름 열 포함, 여러 학생) ──
+function parseMulti(rows, hIdx, col, fname){
+  const map = {}, skipped = [];
+  for (let i = hIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    const c = String(r[col.cls] || "").trim().replace(/반$/, "");
+    const n = parseInt(r[col.num], 10);
+    const univ = String(r[col.univ] || "").trim();
+    const major = String(r[col.major] || "").trim();
+    if (!c || !n || !univ || !major) continue;
+    if (!ROSTER[c] || !ROSTER[c].s.find(s => s[0] === n)) { skipped.push(`${c}반 ${n}번 ${String(r[col.name]||"").trim()}`); continue; }
+    const key = `${c}-${n}`;
+    if (!map[key]) {
+      const nameInFile = String(r[col.name] || "").trim();
+      const rosterName = ROSTER[c].s.find(s => s[0] === n)[1];
+      map[key] = {c, n, nameInFile, rosterName, warn: nameInFile !== rosterName, apps:[]};
+    }
+    const si = String(r[col.si] || "").trim();
+    const memoParts = [];
+    if (/수능최저/.test(String(r[col.min] || ""))) memoParts.push("수능최저 有");
+    if (/차$/.test(si)) memoParts.push(si);   // 전문대 수시1차·2차 구분
+    const bigo = cleanVal(r[col.memo]);
+    if (bigo) memoParts.push(bigo);
+    map[key].apps.push({
+      univ, major,
+      cat: toCat({tu:String(r[col.tu]||""), si, tname:String(r[col.tname]||"")}),
+      tname: cleanTname(String(r[col.tname]||"")),
+      stage1: mapStage1(r[col.st1]), fin: mapFin(r[col.finRes]),
+      rsv: cleanVal(r[col.rsv]), reg: mapReg(r[col.reg]), failReason: mapFail(r[col.failr]),
+      iv: shortDate(r[col.interview]), ann: shortDate(r[col.announce]),
+      memo: memoParts.join(" · ")
+    });
+  }
+  const plans = Object.values(map);
+  if (!plans.length) return {error:`${fname}: 명단과 일치하는 지원 내역이 없습니다.`};
+  return {plans, skipped:[...new Set(skipped)]};
 }
 
 fileInput.onchange = async () => {
@@ -704,13 +766,17 @@ fileInput.onchange = async () => {
     try {
       const wb = XLSX.read(await f.arrayBuffer());
       const res = parseSheet(wb.Sheets[wb.SheetNames[0]], f.name);
-      if (res.error) errors.push(res.error);
-      else if (!res.apps.length) errors.push(`${f.name}: 지원 내역 행이 없습니다.`);
-      else importPlan.push(res);
+      if (res.error) { errors.push(res.error); continue; }
+      const ok = res.plans.filter(p => p.apps.length);
+      if (!ok.length) errors.push(`${f.name}: 지원 내역 행이 없습니다.`);
+      else importPlan.push(...ok);
+      if (res.skipped && res.skipped.length) errors.push(`${f.name}: 명단에 없어 제외 — ${res.skipped.join(", ")}`);
     } catch (e) { errors.push(`${f.name}: 읽기 실패 (${e.message})`); }
   }
   if (!importPlan.length) { alert("불러올 수 있는 데이터가 없습니다.\n\n" + errors.join("\n")); return; }
+  const totApps = importPlan.reduce((s, p) => s + p.apps.length, 0);
   $("ibody").innerHTML =
+    `<div style="font-size:13.5px;font-weight:800;color:var(--navy);margin-bottom:8px">학생 ${importPlan.length}명 · 지원 ${totApps}건을 불러옵니다.</div>` +
     (errors.length ? `<div style="color:var(--red);font-size:13px;font-weight:700;margin-bottom:8px">${errors.map(esc).join("<br>")}</div>` : "") +
     importPlan.map(p => `<div class="ifile">
       <div class="fh">${p.c}반 ${String(p.n).padStart(2,"0")}번 ${esc(p.rosterName)} — ${p.apps.length}건
@@ -729,9 +795,9 @@ $("isave").onclick = async () => {
   try {
     for (const p of importPlan) {
       let apps = replace ? [] : [...getApps(p.c, p.n)];
+      const dkey = x => uKey(x.univ) + "|" + String(x.major).replace(/\s/g, "") + "|" + String(x.tname || "").replace(/\s/g, "");
       for (const a of p.apps) {
-        const dup = apps.some(x => x.univ === a.univ && x.major === a.major && x.tname === a.tname);
-        if (!dup) apps.push(a);
+        if (!apps.some(x => dkey(x) === dkey(a))) apps.push(a);
       }
       await saveDoc(p.c, p.n, apps);
     }
