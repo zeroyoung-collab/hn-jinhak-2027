@@ -516,12 +516,18 @@ function render(){
       .filter(g => g.view.length)
       .map(g => ({...g, k: counts(g.view)}));
     const ivKeyOf = a => a.iv ? annKey(a.iv) : 9999;
+    const annKeyOf = a => { const d = annOf(a); return d ? annKey(d) : 9999; };
+    const minCnt = g => g.view.filter(hasMin).length;
     groups.sort(
       uSort === "name" ? (a, b) => a.name.localeCompare(b.name, "ko") :
       uSort === "pass" ? (a, b) => (b.k.first + b.k.add) - (a.k.first + a.k.add) || b.view.length - a.view.length :
       uSort === "iv" ? (a, b) => Math.min(...a.view.map(ivKeyOf)) - Math.min(...b.view.map(ivKeyOf)) || a.name.localeCompare(b.name, "ko") :
+      uSort === "ann" ? (a, b) => Math.min(...a.view.map(annKeyOf)) - Math.min(...b.view.map(annKeyOf)) || a.name.localeCompare(b.name, "ko") :
+      uSort === "min" ? (a, b) => minCnt(b) - minCnt(a) || b.view.length - a.view.length :
       (a, b) => b.view.length - a.view.length || a.name.localeCompare(b.name, "ko"));
     if (uSort === "iv") groups.forEach(g => g.view.sort((a, b) => ivKeyOf(a) - ivKeyOf(b)));
+    else if (uSort === "ann") groups.forEach(g => g.view.sort((a, b) => annKeyOf(a) - annKeyOf(b)));
+    else if (uSort === "min") groups.forEach(g => g.view.sort((a, b) => (hasMin(b) ? 1 : 0) - (hasMin(a) ? 1 : 0)));
     return (groups.length ? groups.map(g => {
         const uniq = f => [...new Set(g.view.map(f).filter(Boolean))].sort((a, b) => annKey(a) - annKey(b));
         const d1 = uniq(a => a.ann1 || ""), dIv = uniq(a => a.iv || ""), dates = uniq(annOf);
@@ -567,6 +573,8 @@ function render(){
           <option value="cnt" ${uSort==="cnt"?"selected":""}>지원 많은 순</option>
           <option value="pass" ${uSort==="pass"?"selected":""}>합격 많은 순</option>
           <option value="iv" ${uSort==="iv"?"selected":""}>면접 빠른 순</option>
+          <option value="ann" ${uSort==="ann"?"selected":""}>발표 빠른 순</option>
+          <option value="min" ${uSort==="min"?"selected":""}>최저 있는 순</option>
           <option value="name" ${uSort==="name"?"selected":""}>대학명 가나다순</option>
         </select>
         <select id="ff-res"><option value="">결과 전체</option>${FILTERS.map(r=>`<option ${fRes===r?"selected":""}>${r}</option>`).join("")}</select>
