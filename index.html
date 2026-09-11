@@ -95,6 +95,10 @@ tr.rowbtn:hover td{background:#f8f5ec}
 .addbtn{background:#fff;border:2px solid var(--navy);color:var(--navy);padding:5px 12px;font-size:13px;font-weight:800;white-space:nowrap}
 .addbtn:hover{background:var(--navy);color:#fff}
 .entries{padding:4px 0}
+.fh-toggle{cursor:pointer;user-select:none}
+.fh-toggle:hover{background:#f3eee1}
+.caret{font-size:13px;color:var(--soft);font-weight:900;flex:0 0 auto}
+.scard.folded .entries{display:none}
 .entry{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-top:1px solid #f0ece0;flex-wrap:wrap}
 .entry:first-child{border-top:none}
 .entry:hover{background:#f8f5ec}
@@ -296,6 +300,7 @@ const $ = id => document.getElementById(id);
 let DATA = {};          // docId "반-번호" -> {apps:[...]}
 let TAB = "all";        // "all" | "univ" | "1".."6"
 let fRes = "", fCat = "", fQ = "", uSort = "cnt";
+let uFold = new Set();  // 대학별 탭에서 접어 둔 대학(uKey)
 let editCtx = null;     // {c, n, idx|null}
 
 /* ── 로그인 ── */
@@ -418,7 +423,7 @@ function annAlertHtml(){
     </div>`).join("")}</div>`;
 }
 function wireAnnBox(){
-  document.querySelectorAll(".annuniv").forEach(b => b.onclick = () => { TAB = "univ"; fQ = b.dataset.u; fRes = ""; fCat = ""; render(); });
+  document.querySelectorAll(".annuniv").forEach(b => b.onclick = () => { TAB = "univ"; fQ = b.dataset.u; fRes = ""; fCat = ""; uFold.delete(b.dataset.u); render(); });
 }
 
 /* ── 탭 ── */
@@ -521,8 +526,9 @@ function render(){
         const uniq = f => [...new Set(g.view.map(f).filter(Boolean))].sort((a, b) => annKey(a) - annKey(b));
         const d1 = uniq(a => a.ann1 || ""), dIv = uniq(a => a.iv || ""), dates = uniq(annOf);
         const minN = g.view.filter(hasMin).length;
-        return `<div class="scard">
-        <div class="shead">
+        const fk = uKey(g.name), folded = uFold.has(fk);
+        return `<div class="scard${folded ? " folded" : ""}">
+        <div class="shead fh-toggle" data-k="${esc(fk)}">
           <div class="snum" style="min-width:auto;padding:6px 10px">${g.view.length}건</div>
           <div class="sname">${esc(g.name)}</div>
           ${d1.length ? `<span class="dtchip dt-ann1">1차 ${esc(d1.join(" · "))}</span>` : ""}
@@ -530,6 +536,7 @@ function render(){
           ${dIv.length ? `<span class="dtchip dt-iv">면접 ${esc(dIv.join(" · "))}</span>` : ""}
           ${dates.length ? `<span class="dtchip dt-ann">발표 ${esc(dates.join(" · "))}</span>` : ""}
           <div class="ssum"><b style="color:var(--green)">합 ${g.k.first}</b> · <span style="color:var(--gold-d)">추합 ${g.k.add}</span> · <span style="color:var(--red)">불 ${g.k.fail}</span> · 대기 ${g.k.wait}</div>
+          <span class="caret">${folded ? "▸" : "▾"}</span>
         </div>
         <div class="entries">${g.view.map(a => `
           <div class="entry" data-c="${a.c}" data-n="${a.n}" data-i="${a.idx}">
@@ -547,6 +554,13 @@ function render(){
       : `<div class="empty" style="background:#fff;border:2.5px solid var(--navy2)">표시할 지원 내역이 없습니다.</div>`);
     };
     const wireEntries = () => m.querySelectorAll(".entry").forEach(el => el.onclick = () => openModal(el.dataset.c, +el.dataset.n, +el.dataset.i));
+    const foldLabel = () => uFold.size ? "▾ 모두 펼치기" : "▸ 모두 접기";
+    const wireFold = () => m.querySelectorAll(".fh-toggle").forEach(el => el.onclick = () => {
+      const fk = el.dataset.k;
+      uFold.has(fk) ? uFold.delete(fk) : uFold.add(fk);
+      $("res-univ").innerHTML = groupsHtml(); wireEntries(); wireFold();
+      $("ff-fold").textContent = foldLabel();
+    });
     m.innerHTML = statHtml(k) + annAlertHtml() + `
       <div class="filters">
         <select id="ff-sort">
@@ -558,14 +572,22 @@ function render(){
         <select id="ff-res"><option value="">결과 전체</option>${FILTERS.map(r=>`<option ${fRes===r?"selected":""}>${r}</option>`).join("")}</select>
         <select id="ff-cat"><option value="">전형 전체</option>${["학생부교과","학생부종합","논술","실기/특기","정시(가)","정시(나)","정시(다)","기타"].map(c=>`<option ${fCat===c?"selected":""}>${c}</option>`).join("")}</select>
         <input id="ff-q" placeholder="이름·대학·학과 검색" value="${esc(fQ)}">
+        <button class="csvbtn" id="ff-fold" style="white-space:nowrap">${foldLabel()}</button>
       </div>
       <div id="res-univ">` + groupsHtml() + `</div>`;
     $("ff-sort").onchange = e => { uSort = e.target.value; render(); };
     $("ff-res").onchange = e => { fRes = e.target.value; render(); };
     $("ff-cat").onchange = e => { fCat = e.target.value; render(); };
-    $("ff-q").oninput = e => { fQ = e.target.value; $("res-univ").innerHTML = groupsHtml(); wireEntries(); };
+    $("ff-q").oninput = e => { fQ = e.target.value; $("res-univ").innerHTML = groupsHtml(); wireEntries(); wireFold(); };
+    $("ff-fold").onclick = () => {
+      if (uFold.size) uFold.clear();
+      else groupByUniv(allEntries("all")).forEach(g => uFold.add(uKey(g.name)));
+      $("res-univ").innerHTML = groupsHtml(); wireEntries(); wireFold();
+      $("ff-fold").textContent = foldLabel();
+    };
     wireAnnBox();
     wireEntries();
+    wireFold();
   } else {
     const c = TAB, k = counts(allEntries(c));
     m.innerHTML = statHtml(k) +
