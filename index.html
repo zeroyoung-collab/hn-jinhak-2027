@@ -152,6 +152,31 @@ tr.rowbtn:hover td{background:#f8f5ec}
 .csvbtn:hover{border-color:var(--navy);color:var(--navy)}
 footer{text-align:center;font-size:12.5px;font-weight:800;color:var(--navy);padding:24px 0 40px}
 footer b{color:var(--navy)}
+/* ── 인쇄(대학별) ── */
+#printArea{display:none}
+@media print{
+  @page{size:A4;margin:11mm 10mm}
+  body{background:#fff}
+  #gate,header,nav,main,footer,#modal,#imodal{display:none!important}
+  #printArea{display:block;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .pt-hd{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;border-bottom:3px solid var(--navy);padding-bottom:6px;margin-bottom:5px}
+  .pt-hd h1{font-size:16px;font-weight:900;color:var(--navy)}
+  .pt-hd .pt-sub{font-size:10px;color:#555;white-space:nowrap}
+  .pt-meta{font-size:10px;color:#333;margin-bottom:10px}
+  .pgrp{margin-bottom:9px;border:1.5px solid var(--navy)}
+  .pghd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;background:#eef3fa;border-bottom:1.5px solid var(--navy);padding:4px 8px;font-size:10px;color:#333;break-inside:avoid;break-after:avoid;page-break-after:avoid}
+  .pghd .pgname{font-size:13px;font-weight:900;color:var(--navy)}
+  .pghd .pgsum{margin-left:auto}
+  .pgrp table{width:100%;border-collapse:collapse;min-width:0;font-size:10.5px}
+  .pgrp thead{display:table-header-group}
+  .pgrp th{background:#fff;color:#444;border-bottom:1px solid #999;padding:3px 6px;font-size:9.5px;font-weight:700;text-align:left;white-space:nowrap}
+  .pgrp td{padding:3px 6px;border-top:1px solid #ddd;vertical-align:top}
+  .pgrp tr{break-inside:avoid;page-break-inside:avoid}
+  .pst{font-weight:900;white-space:nowrap}
+  .pst.ok{color:#127a30}.pst.add{color:var(--gold-d)}.pst.no{color:var(--red)}.pst.wt{color:#555}
+  .pt-ft{margin-top:10px;text-align:center;font-size:9px;color:#666}
+}
+
 /* ── 모바일: 전체 탭 표 → 카드형 ── */
 @media(max-width:640px){
   header h1{font-size:17px}
@@ -273,6 +298,8 @@ footer b{color:var(--navy)}
     </div>
   </div>
 </div>
+
+<div id="printArea"></div>
 
 <footer>호남고등학교 3학년부 · 2026학년도(2027학년도 대입) &nbsp;|&nbsp; 제작 · <b>호남고 조영신</b></footer>
 
@@ -397,6 +424,33 @@ function groupByUniv(list){
     items: v.items
   }));
 }
+// 대학별 탭·인쇄 공용: 현재 필터·정렬을 적용한 대학별 그룹 목록
+function computeUnivGroups(){
+  const q = fQ.toLowerCase();
+  let groups = groupByUniv(allEntries("all"))
+    .map(g => ({...g, view: g.items.filter(a =>
+      (!fRes || stateOf(a) === fRes) &&
+      (!fCat || a.cat === fCat) &&
+      (!q || (a.univ + a.major + a.nm + (a.tname || "")).toLowerCase().includes(q)) &&
+      // 면접·발표·최저 정렬 시 해당 정보 없는 건은 숨김
+      (uSort === "iv" ? !!a.iv : uSort === "ann" ? !!annOf(a) : uSort === "min" ? hasMin(a) : true))}))
+    .filter(g => g.view.length)
+    .map(g => ({...g, k: counts(g.view)}));
+  const ivKeyOf = a => a.iv ? annKey(a.iv) : 9999;
+  const annKeyOf = a => { const d = annOf(a); return d ? annKey(d) : 9999; };
+  const minCnt = g => g.view.filter(hasMin).length;
+  groups.sort(
+    uSort === "name" ? (a, b) => a.name.localeCompare(b.name, "ko") :
+    uSort === "pass" ? (a, b) => (b.k.first + b.k.add) - (a.k.first + a.k.add) || b.view.length - a.view.length :
+    uSort === "iv" ? (a, b) => Math.min(...a.view.map(ivKeyOf)) - Math.min(...b.view.map(ivKeyOf)) || a.name.localeCompare(b.name, "ko") :
+    uSort === "ann" ? (a, b) => Math.min(...a.view.map(annKeyOf)) - Math.min(...b.view.map(annKeyOf)) || a.name.localeCompare(b.name, "ko") :
+    uSort === "min" ? (a, b) => minCnt(b) - minCnt(a) || b.view.length - a.view.length :
+    (a, b) => b.view.length - a.view.length || a.name.localeCompare(b.name, "ko"));
+  if (uSort === "iv") groups.forEach(g => g.view.sort((a, b) => ivKeyOf(a) - ivKeyOf(b)));
+  else if (uSort === "ann") groups.forEach(g => g.view.sort((a, b) => annKeyOf(a) - annKeyOf(b)));
+  else if (uSort === "min") groups.forEach(g => g.view.sort((a, b) => (hasMin(b) ? 1 : 0) - (hasMin(a) ? 1 : 0)));
+  return groups;
+}
 // 발표 임박(7일 이내) — 결과 미입력 건만
 function annAlertHtml(){
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -507,29 +561,7 @@ function render(){
     const k = counts(allEntries("all"));
     // 검색 입력 중 재렌더링하면 한글 조합(IME)이 끊기므로, 입력창은 그대로 두고 결과만 갱신
     const groupsHtml = () => {
-    const q = fQ.toLowerCase();
-    let groups = groupByUniv(allEntries("all"))
-      .map(g => ({...g, view: g.items.filter(a =>
-        (!fRes || stateOf(a) === fRes) &&
-        (!fCat || a.cat === fCat) &&
-        (!q || (a.univ + a.major + a.nm + (a.tname || "")).toLowerCase().includes(q)) &&
-        // 면접·발표·최저 정렬 시 해당 정보 없는 건은 숨김
-        (uSort === "iv" ? !!a.iv : uSort === "ann" ? !!annOf(a) : uSort === "min" ? hasMin(a) : true))}))
-      .filter(g => g.view.length)
-      .map(g => ({...g, k: counts(g.view)}));
-    const ivKeyOf = a => a.iv ? annKey(a.iv) : 9999;
-    const annKeyOf = a => { const d = annOf(a); return d ? annKey(d) : 9999; };
-    const minCnt = g => g.view.filter(hasMin).length;
-    groups.sort(
-      uSort === "name" ? (a, b) => a.name.localeCompare(b.name, "ko") :
-      uSort === "pass" ? (a, b) => (b.k.first + b.k.add) - (a.k.first + a.k.add) || b.view.length - a.view.length :
-      uSort === "iv" ? (a, b) => Math.min(...a.view.map(ivKeyOf)) - Math.min(...b.view.map(ivKeyOf)) || a.name.localeCompare(b.name, "ko") :
-      uSort === "ann" ? (a, b) => Math.min(...a.view.map(annKeyOf)) - Math.min(...b.view.map(annKeyOf)) || a.name.localeCompare(b.name, "ko") :
-      uSort === "min" ? (a, b) => minCnt(b) - minCnt(a) || b.view.length - a.view.length :
-      (a, b) => b.view.length - a.view.length || a.name.localeCompare(b.name, "ko"));
-    if (uSort === "iv") groups.forEach(g => g.view.sort((a, b) => ivKeyOf(a) - ivKeyOf(b)));
-    else if (uSort === "ann") groups.forEach(g => g.view.sort((a, b) => annKeyOf(a) - annKeyOf(b)));
-    else if (uSort === "min") groups.forEach(g => g.view.sort((a, b) => (hasMin(b) ? 1 : 0) - (hasMin(a) ? 1 : 0)));
+    const groups = computeUnivGroups();
     return (groups.length ? groups.map(g => {
         const uniq = f => [...new Set(g.view.map(f).filter(Boolean))].sort((a, b) => annKey(a) - annKey(b));
         const d1 = uniq(a => a.ann1 || ""), dIv = uniq(a => a.iv || ""), dates = uniq(annOf);
@@ -583,6 +615,7 @@ function render(){
         <select id="ff-cat"><option value="">전형 전체</option>${["학생부교과","학생부종합","논술","실기/특기","정시(가)","정시(나)","정시(다)","기타"].map(c=>`<option ${fCat===c?"selected":""}>${c}</option>`).join("")}</select>
         <input id="ff-q" placeholder="이름·대학·학과 검색" value="${esc(fQ)}">
         <button class="csvbtn" id="ff-fold" style="white-space:nowrap">${foldLabel()}</button>
+        <button class="csvbtn" id="ff-print" style="white-space:nowrap">🖨 인쇄</button>
       </div>
       <div id="res-univ">` + groupsHtml() + `</div>`;
     $("ff-sort").onchange = e => { uSort = e.target.value; render(); };
@@ -595,6 +628,7 @@ function render(){
       $("res-univ").innerHTML = groupsHtml(); wireEntries(); wireFold();
       $("ff-fold").textContent = foldLabel();
     };
+    $("ff-print").onclick = printUniv;
     wireAnnBox();
     wireEntries();
     wireFold();
@@ -898,6 +932,53 @@ $("isave").onclick = async () => {
   } catch (e) { alert("저장 실패: " + e.message); }
   $("isave").disabled = false;
 };
+
+/* ── 대학별 인쇄 ── */
+function printUniv(){
+  const groups = computeUnivGroups();
+  if (!groups.length) { alert("인쇄할 지원 내역이 없습니다."); return; }
+  const all = groups.flatMap(g => g.view), k = counts(all);
+  const now = new Date();
+  const sortLbl = {cnt:"지원 많은 순", pass:"합격 많은 순", iv:"면접 빠른 순", ann:"발표 빠른 순", min:"최저 있는 순", name:"대학명 가나다순"}[uSort] || "";
+  const filt = [fRes ? "결과: " + fRes : "", fCat ? "전형: " + fCat : "", fQ ? `검색 "${fQ}"` : ""].filter(Boolean).join(" · ");
+  const stCls = st => st === "합격" ? "ok" : st === "추가합격" ? "add" : st === "불합격" ? "no" : "wt";
+  $("printArea").innerHTML = `
+    <div class="pt-hd">
+      <h1>3학년 대입 지원현황 — 대학별</h1>
+      <div class="pt-sub">호남고등학교 · 2026학년도(2027학년도 대입)</div>
+    </div>
+    <div class="pt-meta">${now.getFullYear()}.${now.getMonth() + 1}.${now.getDate()}. 출력 · ${sortLbl} · ${groups.length}개교 ${all.length}건 — 합격 ${k.first} · 추가합격 ${k.add} · 불합격 ${k.fail} · 발표 전·대기 ${k.wait}${filt ? " · 필터(" + esc(filt) + ")" : ""}</div>
+    ${groups.map(g => `
+    <div class="pgrp">
+      <div class="pghd">
+        <span class="pgname">${esc(g.name)}</span>
+        <span>${g.view.length}건</span>
+        <span class="pgsum">합 ${g.k.first} · 추합 ${g.k.add} · 불 ${g.k.fail} · 대기 ${g.k.wait}</span>
+      </div>
+      <table>
+        <thead><tr><th style="width:88px">학생</th><th>모집단위</th><th>전형</th><th style="width:130px">일정</th><th>수능최저</th><th style="width:96px">결과</th><th>비고</th></tr></thead>
+        <tbody>${g.view.map(a => {
+          const st = stateOf(a);
+          const res = [st === "충원대기(예비)" ? "예비 " + a.rsv : st,
+            a.rsv && st !== "충원대기(예비)" ? "예비 " + a.rsv : "",
+            st === "불합격" && a.failReason ? a.failReason : "",
+            a.reg === "Y" ? "등록 Y" : a.reg === "N" ? "등록 N" : ""].filter(Boolean).join(" · ");
+          const sched = [a.ann1 ? "1차 " + a.ann1 : "", a.iv ? "면접 " + a.iv : "", annOf(a) ? "발표 " + annOf(a) : ""].filter(Boolean).join(" · ");
+          return `<tr>
+            <td style="white-space:nowrap;font-weight:700">${a.c}반 ${String(a.n).padStart(2, "0")} ${esc(a.nm)}</td>
+            <td>${esc(a.major)}</td>
+            <td>${esc(a.cat)}${a.tname ? " · " + esc(a.tname) : ""}</td>
+            <td>${esc(sched)}</td>
+            <td>${hasMin(a) ? esc(a.minTxt || "있음") : ""}</td>
+            <td class="pst ${stCls(st)}">${esc(res)}</td>
+            <td>${esc(a.memo || "")}</td>
+          </tr>`; }).join("")}
+        </tbody>
+      </table>
+    </div>`).join("")}
+    <div class="pt-ft">호남고등학교 3학년부 · 제작 · 호남고 조영신</div>`;
+  window.print();
+}
 
 /* ── CSV ── */
 function downloadCsv(cls){
