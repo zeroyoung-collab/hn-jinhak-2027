@@ -326,7 +326,7 @@ const COL = "pw_jinhak_apps";
 const $ = id => document.getElementById(id);
 let DATA = {};          // docId "반-번호" -> {apps:[...]}
 let TAB = "all";        // "all" | "univ" | "1".."6"
-let fRes = "", fCat = "", fQ = "", uSort = "cnt";
+let fRes = "", fCat = "", fQ = "", fGrp = "", uSort = "cnt";
 let uFold = new Set();  // 대학별 탭에서 접어 둔 대학(uKey)
 let editCtx = null;     // {c, n, idx|null}
 
@@ -424,6 +424,19 @@ function groupByUniv(list){
     items: v.items
   }));
 }
+// 상위권 그룹 필터 — med는 모집단위, tech·seoul은 대학명 기준. 남서울대·분교(세종·미래·글로컬 등)는 seoul에서 제외
+const GRP = {
+  top:  {label:"상위권 전체", test:a => GRP.med.test(a) || GRP.tech.test(a) || GRP.seoul.test(a)},
+  med:  {label:"의치한약수", test:a => /의예|의학과|의과대학|치의|한의|약학|수의/.test(String(a.major))},
+  tech: {label:"과기원·이공특", test:a => /KAIST|카이스트|한국과학기술원|GIST|지스트|광주과학기술원|DGIST|디지스트|대구경북과학기술원|UNIST|유니스트|울산과학기술원|포스텍|POSTECH|포항공|켄텍|KENTECH|에너지공과/i.test(String(a.univ))},
+  seoul:{label:"서울 주요대", test:a => {
+    const u = String(a.univ).replace(/\s/g, "");
+    if (/남서울|세종|미래|원주|글로컬|ERICA|에리카|WISE/i.test(u)) return false;
+    return /서울대|연세대|고려대|서강대|성균관대|한양대|중앙대|경희대|한국외국어대|한국외대|서울시립대|이화여대|건국대|동국대|홍익대|숙명여대/.test(u);
+  }}
+};
+const grpSelHtml = () => `<select id="ff-grp"><option value="">그룹 전체</option>${Object.entries(GRP).map(([k, g]) => `<option value="${k}" ${fGrp === k ? "selected" : ""}>${g.label}</option>`).join("")}</select>`;
+
 // 대학별 탭·인쇄 공용: 현재 필터·정렬을 적용한 대학별 그룹 목록
 function computeUnivGroups(){
   const q = fQ.toLowerCase();
@@ -431,6 +444,7 @@ function computeUnivGroups(){
     .map(g => ({...g, view: g.items.filter(a =>
       (!fRes || stateOf(a) === fRes) &&
       (!fCat || a.cat === fCat) &&
+      (!fGrp || GRP[fGrp].test(a)) &&
       (!q || (a.univ + a.major + a.nm + (a.tname || "")).toLowerCase().includes(q)) &&
       // 면접·발표·최저 정렬 시 해당 정보 없는 건은 숨김
       (uSort === "iv" ? !!a.iv : uSort === "ann" ? !!annOf(a) : uSort === "min" ? hasMin(a) : true))}))
@@ -525,6 +539,7 @@ function render(){
       let list = allEntries("all");
       if (fRes) list = list.filter(a => stateOf(a) === fRes);
       if (fCat) list = list.filter(a => a.cat === fCat);
+      if (fGrp) list = list.filter(a => GRP[fGrp].test(a));
       if (fQ) { const q = fQ.toLowerCase();
         list = list.filter(a => (a.univ+a.major+a.nm+(a.tname||"")).toLowerCase().includes(q)); }
       return `<div class="tblwrap"><table>
@@ -541,6 +556,7 @@ function render(){
     const wireRows = () => m.querySelectorAll("tr.rowbtn").forEach(tr => tr.onclick = () => openModal(tr.dataset.c, +tr.dataset.n, +tr.dataset.i));
     m.innerHTML = statHtml(k) + annAlertHtml() + `
       <div class="filters">
+        ${grpSelHtml()}
         <select id="ff-res"><option value="">결과 전체</option>${FILTERS.map(r=>`<option ${fRes===r?"selected":""}>${r}</option>`).join("")}</select>
         <select id="ff-cat"><option value="">전형 전체</option>${["학생부교과","학생부종합","논술","실기/특기","정시(가)","정시(나)","정시(다)","기타"].map(c=>`<option ${fCat===c?"selected":""}>${c}</option>`).join("")}</select>
         <input id="ff-q" placeholder="이름·대학·학과 검색" value="${esc(fQ)}">
@@ -550,6 +566,7 @@ function render(){
         <button class="csvbtn" id="csv">⬇ 엑셀(CSV) 다운로드</button>
       </div>
       <div id="res-all">` + listHtml() + `</div>`;
+    $("ff-grp").onchange = e => { fGrp = e.target.value; render(); };
     $("ff-res").onchange = e => { fRes = e.target.value; render(); };
     $("ff-cat").onchange = e => { fCat = e.target.value; render(); };
     $("ff-q").oninput = e => { fQ = e.target.value; $("res-all").innerHTML = listHtml(); wireRows(); };
@@ -603,6 +620,7 @@ function render(){
     });
     m.innerHTML = statHtml(k) + annAlertHtml() + `
       <div class="filters">
+        ${grpSelHtml()}
         <select id="ff-sort">
           <option value="cnt" ${uSort==="cnt"?"selected":""}>지원 많은 순</option>
           <option value="pass" ${uSort==="pass"?"selected":""}>합격 많은 순</option>
@@ -618,6 +636,7 @@ function render(){
         <button class="csvbtn" id="ff-print" style="white-space:nowrap">🖨 인쇄</button>
       </div>
       <div id="res-univ">` + groupsHtml() + `</div>`;
+    $("ff-grp").onchange = e => { fGrp = e.target.value; render(); };
     $("ff-sort").onchange = e => { uSort = e.target.value; render(); };
     $("ff-res").onchange = e => { fRes = e.target.value; render(); };
     $("ff-cat").onchange = e => { fCat = e.target.value; render(); };
@@ -940,7 +959,7 @@ function printUniv(){
   const all = groups.flatMap(g => g.view), k = counts(all);
   const now = new Date();
   const sortLbl = {cnt:"지원 많은 순", pass:"합격 많은 순", iv:"면접 빠른 순", ann:"발표 빠른 순", min:"최저 있는 순", name:"대학명 가나다순"}[uSort] || "";
-  const filt = [fRes ? "결과: " + fRes : "", fCat ? "전형: " + fCat : "", fQ ? `검색 "${fQ}"` : ""].filter(Boolean).join(" · ");
+  const filt = [fGrp ? "그룹: " + GRP[fGrp].label : "", fRes ? "결과: " + fRes : "", fCat ? "전형: " + fCat : "", fQ ? `검색 "${fQ}"` : ""].filter(Boolean).join(" · ");
   const stCls = st => st === "합격" ? "ok" : st === "추가합격" ? "add" : st === "불합격" ? "no" : "wt";
   $("printArea").innerHTML = `
     <div class="pt-hd">
